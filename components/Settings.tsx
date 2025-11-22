@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { User } from 'firebase/auth';
 import { DefaultFieldSetting, BusinessInfo, JobTemplate, JobStatus, ALL_JOB_STATUSES, Contact, EmailSettings, CatalogItem, DEFAULT_ON_MY_WAY_TEMPLATE, MapSettings } from '../types.ts';
 import { ArrowLeftIcon, TrashIcon, PlusIcon, DownloadIcon, UploadIcon, UserCircleIcon, EditIcon, CalendarIcon, ChevronDownIcon, EyeIcon, MapPinIcon } from './icons.tsx';
 import { saveJsonFile, fileToDataUrl, generateICSContent, downloadICSFile } from '../utils.ts';
-import { getAllFiles } from '../db.ts';
 import JobTemplateModal from './JobTemplateModal.tsx';
 import { useGoogleMaps } from '../hooks/useGoogleMaps.ts';
 
@@ -44,6 +44,8 @@ interface SettingsProps {
     onToggleShowContactPhotos: (enabled: boolean) => void;
     mapSettings: MapSettings;
     onUpdateMapSettings: (settings: MapSettings) => void;
+    user: User | null;
+    onSignOut: () => void;
 }
 
 const SettingsSection = ({ title, subtitle, children, defaultOpen = false }: { title: string, subtitle?: string, children?: React.ReactNode, defaultOpen?: boolean }) => {
@@ -103,6 +105,8 @@ const Settings: React.FC<SettingsProps> = ({
     onToggleShowContactPhotos,
     mapSettings,
     onUpdateMapSettings,
+    user,
+    onSignOut,
 }) => {
     const [newFieldLabel, setNewFieldLabel] = useState('');
     const [currentBusinessInfo, setCurrentBusinessInfo] = useState<BusinessInfo>(businessInfo);
@@ -189,13 +193,14 @@ const Settings: React.FC<SettingsProps> = ({
 
     const handleManualBackup = async () => {
         try {
-            const files = await getAllFiles();
-            const backupData = { ...appStateForBackup, files };
+            // For cloud sync, we backup the state which includes file URLs (metadata)
+            // We do NOT backup the binary file data into the JSON to keep it lightweight
+            const backupData = { ...appStateForBackup };
             const timestamp = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
             await saveJsonFile(backupData, `contacts-backup-${timestamp}.json`);
         } catch (error) {
             console.error("Failed to create backup:", error);
-            alert("Could not create backup. Failed to read attachments from the database.");
+            alert("Could not create backup.");
         }
     };
 
@@ -261,6 +266,32 @@ const Settings: React.FC<SettingsProps> = ({
             </div>
             <div className="px-4 sm:px-6 py-6 flex-grow">
                 
+                {/* Account Section */}
+                <div className="mb-8">
+                    <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-100">Account</h3>
+                    <div className="mt-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4 flex items-center justify-between border border-slate-200 dark:border-slate-600">
+                        <div className="flex items-center space-x-4">
+                            {user?.photoURL ? (
+                                <img src={user.photoURL} alt="Profile" className="w-12 h-12 rounded-full" />
+                            ) : (
+                                <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-600 flex items-center justify-center text-slate-500 dark:text-slate-300">
+                                    <UserCircleIcon className="w-8 h-8" />
+                                </div>
+                            )}
+                            <div>
+                                <p className="font-medium text-slate-900 dark:text-white">{user?.displayName || 'User'}</p>
+                                <p className="text-sm text-slate-500 dark:text-slate-400">{user?.email}</p>
+                            </div>
+                        </div>
+                        <button 
+                            onClick={onSignOut}
+                            className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30 rounded-md transition-colors"
+                        >
+                            Sign Out
+                        </button>
+                    </div>
+                </div>
+
                  <div className="mb-8">
                     <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-100">Appearance</h3>
                     <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Choose how the app looks.</p>
@@ -619,22 +650,22 @@ const Settings: React.FC<SettingsProps> = ({
 
                 <div className="mt-8 border-t dark:border-slate-700 pt-6 mb-8">
                     <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-100">Backup & Restore</h3>
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Manage your application data. Backups include all contacts, custom fields, and work logs.</p>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Manage your application data.</p>
                     <div className="mt-6 space-y-3">
                          <div className="flex items-center justify-between gap-4 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
                             <div>
                                 <p className="font-medium text-slate-700 dark:text-slate-200">Manual Backup</p>
-                                <p className="text-xs text-slate-500 dark:text-slate-400">Download all your data to a single file.</p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">Download a JSON copy of your cloud data (Contacts & Job History). Note: Photos and files are stored securely in the cloud and are linked in this backup.</p>
                             </div>
                             <button onClick={handleManualBackup} className="inline-flex items-center justify-center whitespace-nowrap flex-shrink-0 space-x-2 px-3 py-2 rounded-md text-sm font-medium text-sky-600 dark:text-sky-300 bg-sky-100 dark:bg-sky-900/50 hover:bg-sky-200 dark:hover:bg-sky-900 transition-colors">
                                 <DownloadIcon className="w-4 h-4" />
-                                <span>Backup Now</span>
+                                <span>Backup JSON</span>
                             </button>
                         </div>
                         <div className="flex items-center justify-between gap-4 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
                             <div>
                                 <p className="font-medium text-slate-700 dark:text-slate-200">Restore from Backup</p>
-                                <p className="text-xs text-slate-500 dark:text-slate-400">Import data from a backup file.</p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">Import data from a backup file to overwrite current cloud data.</p>
                             </div>
                             <label htmlFor="backup-upload" className="cursor-pointer inline-flex items-center justify-center whitespace-nowrap flex-shrink-0 space-x-2 px-3 py-2 rounded-md text-sm font-medium text-sky-600 dark:text-sky-300 bg-sky-100 dark:bg-sky-900/50 hover:bg-sky-200 dark:hover:bg-sky-900 transition-colors">
                                 <UploadIcon className="w-4 h-4" />
@@ -642,33 +673,6 @@ const Settings: React.FC<SettingsProps> = ({
                                 <input id="backup-upload" type="file" accept=".json" className="hidden" onChange={handleFileImport} />
                             </label>
                         </div>
-                        <div className="flex items-center justify-between gap-4 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
-                            <div>
-                                <p className="font-medium text-slate-700 dark:text-slate-200">Automatic Backups</p>
-                                <p className="text-xs text-slate-500 dark:text-slate-400">Automatically save a backup when data changes.</p>
-                            </div>
-                            <button
-                                onClick={() => onToggleAutoBackup(!autoBackupEnabled)}
-                                className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 ${autoBackupEnabled ? 'bg-sky-500' : 'bg-slate-300 dark:bg-slate-600'}`}
-                            >
-                                <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200 ${autoBackupEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
-                            </button>
-                        </div>
-
-                         {autoBackupEnabled && lastAutoBackup && (
-                            <div className="flex items-center justify-between gap-4 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
-                                <div>
-                                    <p className="font-medium text-slate-700 dark:text-slate-200">Last Automatic Backup</p>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                                        {new Date(lastAutoBackup.timestamp).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
-                                    </p>
-                                </div>
-                                <button onClick={handleDownloadAutoBackup} className="inline-flex items-center justify-center whitespace-nowrap flex-shrink-0 space-x-2 px-3 py-2 rounded-md text-sm font-medium text-sky-600 dark:text-sky-300 bg-sky-100 dark:bg-sky-900/50 hover:bg-sky-200 dark:hover:bg-sky-900 transition-colors">
-                                    <DownloadIcon className="w-4 h-4" />
-                                    <span>Download</span>
-                                </button>
-                            </div>
-                        )}
                     </div>
                 </div>
 
