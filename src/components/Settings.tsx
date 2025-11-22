@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { User } from 'firebase/auth';
 import { DefaultFieldSetting, BusinessInfo, JobTemplate, JobStatus, ALL_JOB_STATUSES, Contact, EmailSettings, CatalogItem, DEFAULT_ON_MY_WAY_TEMPLATE, MapSettings } from '../types.ts';
 import { ArrowLeftIcon, TrashIcon, PlusIcon, DownloadIcon, UploadIcon, UserCircleIcon, EditIcon, CalendarIcon, ChevronDownIcon, EyeIcon, MapPinIcon } from './icons.tsx';
 import { saveJsonFile, fileToDataUrl, generateICSContent, downloadICSFile } from '../utils.ts';
@@ -43,6 +44,8 @@ interface SettingsProps {
     onToggleShowContactPhotos: (enabled: boolean) => void;
     mapSettings: MapSettings;
     onUpdateMapSettings: (settings: MapSettings) => void;
+    user: User | null;
+    onSignOut: () => void;
 }
 
 const SettingsSection = ({ title, subtitle, children, defaultOpen = false }: { title: string, subtitle?: string, children?: React.ReactNode, defaultOpen?: boolean }) => {
@@ -102,6 +105,8 @@ const Settings: React.FC<SettingsProps> = ({
     onToggleShowContactPhotos,
     mapSettings,
     onUpdateMapSettings,
+    user,
+    onSignOut,
 }) => {
     const [newFieldLabel, setNewFieldLabel] = useState('');
     const [currentBusinessInfo, setCurrentBusinessInfo] = useState<BusinessInfo>(businessInfo);
@@ -261,6 +266,32 @@ const Settings: React.FC<SettingsProps> = ({
             </div>
             <div className="px-4 sm:px-6 py-6 flex-grow">
                 
+                {/* Account Section */}
+                <div className="mb-8">
+                    <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-100">Account</h3>
+                    <div className="mt-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4 flex items-center justify-between border border-slate-200 dark:border-slate-600">
+                        <div className="flex items-center space-x-4">
+                            {user?.photoURL ? (
+                                <img src={user.photoURL} alt="Profile" className="w-12 h-12 rounded-full" />
+                            ) : (
+                                <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-600 flex items-center justify-center text-slate-500 dark:text-slate-300">
+                                    <UserCircleIcon className="w-8 h-8" />
+                                </div>
+                            )}
+                            <div>
+                                <p className="font-medium text-slate-900 dark:text-white">{user?.displayName || 'User'}</p>
+                                <p className="text-sm text-slate-500 dark:text-slate-400">{user?.email}</p>
+                            </div>
+                        </div>
+                        <button 
+                            onClick={onSignOut}
+                            className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30 rounded-md transition-colors"
+                        >
+                            Sign Out
+                        </button>
+                    </div>
+                </div>
+
                  <div className="mb-8">
                     <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-100">Appearance</h3>
                     <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Choose how the app looks.</p>
