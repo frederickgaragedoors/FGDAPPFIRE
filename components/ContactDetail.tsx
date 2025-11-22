@@ -1,12 +1,6 @@
 
-
-
-
-
-
-
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { Contact, DefaultFieldSetting, FileAttachment, JobTicket, jobStatusColors, JobTemplate, JobStatus, CatalogItem, paymentStatusColors, paymentStatusLabels, PaymentStatus, BusinessInfo } from '../types.ts';
+import { Contact, DefaultFieldSetting, FileAttachment, JobTicket, jobStatusColors, JobTemplate, JobStatus, CatalogItem, paymentStatusColors, paymentStatusLabels, BusinessInfo } from '../types.ts';
 import PhotoGalleryModal from './PhotoGalleryModal.tsx';
 import JobTicketModal from './JobTicketModal.tsx';
 import EmptyState from './EmptyState.tsx';
@@ -28,7 +22,6 @@ import {
   HomeIcon,
 } from './icons.tsx';
 import { fileToDataUrl, formatFileSize, getInitials, generateId, calculateJobTicketTotal, formatTime } from '../utils.ts';
-import { getFiles } from '../db.ts';
 
 interface ContactDetailProps {
     contact: Contact;
@@ -67,7 +60,7 @@ const ContactDetail: React.FC<ContactDetailProps> = ({ contact, defaultFields, o
     const [showPhotoOptions, setShowPhotoOptions] = useState(false);
     const [isJobTicketModalOpen, setIsJobTicketModalOpen] = useState(false);
     const [editingJobTicket, setEditingJobTicket] = useState<JobTicket | null>(null);
-    const [hydratedFiles, setHydratedFiles] = useState<FileAttachment[]>([]);
+    // const [hydratedFiles, setHydratedFiles] = useState<FileAttachment[]>([]); // No longer needed for cloud sync
     const [isLoadingFiles, setIsLoadingFiles] = useState(false);
     const [activeTab, setActiveTab] = useState<ActiveTab>('details');
 
@@ -76,7 +69,7 @@ const ContactDetail: React.FC<ContactDetailProps> = ({ contact, defaultFields, o
     const fileUploadRef = useRef<HTMLInputElement>(null);
 
     // Handle initialJobDate prop to open modal automatically for NEW job
-    // OR openJobId to open modal automatically for EXISTING job (e.g. created from calendar flow)
+    // OR openJobId to open modal automatically for EXISTING job
     useEffect(() => {
         if (initialJobDate) {
             setActiveTab('jobs');
@@ -101,47 +94,24 @@ const ContactDetail: React.FC<ContactDetailProps> = ({ contact, defaultFields, o
                  setIsJobTicketModalOpen(true);
              }
         }
-    }, [initialJobDate, openJobId, businessInfo]); // Deliberately excluding contact.jobTickets to run primarily on mount/navigation
+    }, [initialJobDate, openJobId, businessInfo]); 
 
     const handleViewFile = async (file: FileAttachment) => {
         if (!file.dataUrl) return;
-        try {
-            const response = await fetch(file.dataUrl);
-            const blob = await response.blob();
-            const url = URL.createObjectURL(blob);
-            window.open(url, '_blank');
-        } catch (error) {
-            console.error('Error opening file:', error);
-            alert('Could not open the file.');
-        }
+        // For Cloud Sync, dataUrl IS the download URL
+        window.open(file.dataUrl, '_blank');
     };
     
-    useEffect(() => {
-        const contactFiles = contact.files || [];
-        if (contactFiles.length > 0) {
-            setIsLoadingFiles(true);
-            getFiles(contactFiles.map(f => f.id))
-                .then(filesFromDb => {
-                    setHydratedFiles(filesFromDb);
-                })
-                .catch(err => {
-                    console.error("Failed to load files from DB", err);
-                    alert("Could not load some attachments for this contact.");
-                })
-                .finally(() => {
-                    setIsLoadingFiles(false);
-                });
-        } else {
-            setHydratedFiles([]);
-            setIsLoadingFiles(false);
-        }
-    }, [contact.files]);
+    // No hydration effect needed anymore, contact.files contains full URLs from Firestore
 
     const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
+            setIsLoadingFiles(true);
             try {
                 const newFilesPromises = Array.from(e.target.files).map(async (file: File) => {
-                    const dataUrl = await fileToDataUrl(file);
+                    // We still need to convert to Base64 momentarily for the App.tsx handler to upload it
+                    // Alternatively, we could pass File objects, but existing utility expects dataUrl prop structure
+                    const dataUrl = await fileToDataUrl(file); 
                     return {
                         id: generateId(),
                         name: file.name,
@@ -154,7 +124,9 @@ const ContactDetail: React.FC<ContactDetailProps> = ({ contact, defaultFields, o
                 await addFilesToContact(contact.id, newFiles);
             } catch(error) {
                 console.error("Error reading files:", error);
-                alert("There was an error processing your files. They might be too large or corrupted.");
+                alert("There was an error processing your files.");
+            } finally {
+                setIsLoadingFiles(false);
             }
             if(e.target) e.target.value = ''; // Reset input
         }
@@ -182,16 +154,17 @@ const ContactDetail: React.FC<ContactDetailProps> = ({ contact, defaultFields, o
         if (contact.photoUrl) {
             images.push({ url: contact.photoUrl, name: `${contact.name} (Profile)` });
         }
-        hydratedFiles.forEach(file => {
+        // Use contact.files directly
+        (contact.files || []).forEach(file => {
             if (file.type.startsWith('image/') && file.dataUrl) {
                 images.push({ url: file.dataUrl, name: file.name });
             }
         });
         return images;
-    }, [contact.photoUrl, contact.name, hydratedFiles]);
+    }, [contact.photoUrl, contact.name, contact.files]);
     
-    const imageFiles = useMemo(() => hydratedFiles.filter(file => file.type.startsWith('image/')), [hydratedFiles]);
-    const otherFiles = useMemo(() => hydratedFiles.filter(file => !file.type.startsWith('image/')), [hydratedFiles]);
+    const imageFiles = useMemo(() => (contact.files || []).filter(file => file.type.startsWith('image/')), [contact.files]);
+    const otherFiles = useMemo(() => (contact.files || []).filter(file => !file.type.startsWith('image/')), [contact.files]);
 
     const openGallery = (index: number) => {
         setGalleryCurrentIndex(index);
@@ -236,20 +209,16 @@ const ContactDetail: React.FC<ContactDetailProps> = ({ contact, defaultFields, o
         return [...(contact.jobTickets || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [contact.jobTickets]);
 
-    // Backward compatibility: convert single doorProfile to array if needed
     const normalizedDoorProfiles = useMemo(() => {
         if (contact.doorProfiles && contact.doorProfiles.length > 0) {
             return contact.doorProfiles.map(p => ({
                 ...p,
-                // Migrate legacy data where installDate might have been a single field
                 doorInstallDate: p.doorInstallDate || (p as any).installDate || 'Unknown',
                 springInstallDate: p.springInstallDate || (p as any).installDate || 'Unknown',
                 openerInstallDate: p.openerInstallDate || (p as any).installDate || 'Unknown',
-                // Handle springs array creation for display if not present
                 springs: p.springs || (p.springSize ? [{ id: generateId(), size: p.springSize }] : [])
             }));
         }
-        // Fallback for old data structure (single profile)
         if ((contact as any).doorProfile) {
              const oldP = (contact as any).doorProfile;
             return [{
@@ -271,7 +240,6 @@ const ContactDetail: React.FC<ContactDetailProps> = ({ contact, defaultFields, o
                 </span>
             );
         }
-        // Check if it matches YYYY-MM-DD format approximately
         if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
              return <span className="text-sm font-medium text-slate-900 dark:text-slate-200">{new Date(value).toLocaleDateString()}</span>;
         }
@@ -326,7 +294,6 @@ const ContactDetail: React.FC<ContactDetailProps> = ({ contact, defaultFields, o
                             </div>
                         </div>
 
-                        {/* Door/System Profile Section */}
                         {normalizedDoorProfiles.length > 0 && (
                              <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
                                 <div className="flex items-center mb-4">
@@ -341,8 +308,6 @@ const ContactDetail: React.FC<ContactDetailProps> = ({ contact, defaultFields, o
                                                     System {index + 1}
                                                 </div>
                                             )}
-                                            
-                                            {/* Door Section - Darker */}
                                             <div className="p-3 bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
                                                 <div className="flex items-center mb-2">
                                                     <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2"></span>
@@ -363,8 +328,6 @@ const ContactDetail: React.FC<ContactDetailProps> = ({ contact, defaultFields, o
                                                     </div>
                                                 </div>
                                             </div>
-
-                                            {/* Springs Section - Lighter */}
                                             <div className="p-3 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
                                                  <div className="flex items-center mb-2">
                                                     <span className="w-1.5 h-1.5 rounded-full bg-orange-500 mr-2"></span>
@@ -398,8 +361,6 @@ const ContactDetail: React.FC<ContactDetailProps> = ({ contact, defaultFields, o
                                                     </div>
                                                 </div>
                                             </div>
-
-                                            {/* Opener Section - Darker */}
                                             <div className="p-3 bg-slate-100 dark:bg-slate-900">
                                                  <div className="flex items-center mb-2">
                                                     <span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-2"></span>
@@ -563,7 +524,7 @@ const ContactDetail: React.FC<ContactDetailProps> = ({ contact, defaultFields, o
                                 </div>
                             </div>
                             {isLoadingFiles ? (
-                                <div className="text-center text-slate-500 dark:text-slate-400 py-4">Loading photos...</div>
+                                <div className="text-center text-slate-500 dark:text-slate-400 py-4">Uploading...</div>
                             ) : imageFiles.length > 0 ? (
                                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-3 lg:grid-cols-4 gap-4">
                                     {imageFiles.map(file => {
@@ -593,7 +554,7 @@ const ContactDetail: React.FC<ContactDetailProps> = ({ contact, defaultFields, o
                                 ><PlusIcon className="w-5 h-5" /></button>
                             </div>
                             {isLoadingFiles ? (
-                                <div className="text-center text-slate-500 dark:text-slate-400 py-4">Loading files...</div>
+                                <div className="text-center text-slate-500 dark:text-slate-400 py-4">Uploading...</div>
                             ) : otherFiles.length > 0 ? (
                                 <ul className="space-y-3">
                                     {otherFiles.map(file => (
@@ -607,7 +568,7 @@ const ContactDetail: React.FC<ContactDetailProps> = ({ contact, defaultFields, o
                                                 {VIEWABLE_MIME_TYPES.includes(file.type) && file.dataUrl && (
                                                     <button onClick={() => handleViewFile(file)} className="text-sky-600 dark:text-sky-400 hover:text-sky-800 dark:hover:text-sky-300 font-medium text-sm flex-shrink-0">View</button>
                                                 )}
-                                                {file.dataUrl && <a href={file.dataUrl} download={file.name} className="text-sky-600 dark:text-sky-400 hover:text-sky-800 dark:hover:text-sky-300 font-medium text-sm flex-shrink-0">Download</a>}
+                                                {file.dataUrl && <a href={file.dataUrl} download={file.name} target="_blank" rel="noreferrer" className="text-sky-600 dark:text-sky-400 hover:text-sky-800 dark:hover:text-sky-300 font-medium text-sm flex-shrink-0">Download</a>}
                                             </div>
                                         </li>
                                     ))}
@@ -620,7 +581,6 @@ const ContactDetail: React.FC<ContactDetailProps> = ({ contact, defaultFields, o
                 );
         }
     }
-
 
     const TabButton: React.FC<{ tab: ActiveTab; label: string; }> = ({ tab, label }) => (
         <button
