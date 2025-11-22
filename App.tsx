@@ -1,5 +1,10 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { onAuthStateChanged, User, signOut } from 'firebase/auth';
+import { collection, doc, onSnapshot, setDoc, deleteDoc, updateDoc, getDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { auth, db, storage, isFirebaseConfigured } from './firebase.ts';
+
 import Header from './components/Header.tsx';
 import ContactList from './components/ContactList.tsx';
 import ContactDetail from './components/ContactDetail.tsx';
@@ -11,213 +16,115 @@ import InvoiceView from './components/InvoiceView.tsx';
 import JobDetailView from './components/JobDetailView.tsx';
 import ContactSelectorModal from './components/ContactSelectorModal.tsx';
 import RouteView from './components/RouteView.tsx';
+import Login from './components/Login.tsx';
+import { SettingsIcon } from './components/icons.tsx';
+
 import { Contact, ViewState, DefaultFieldSetting, BusinessInfo, JobTemplate, JobStatus, ALL_JOB_STATUSES, JobTicket, FileAttachment, EmailSettings, DEFAULT_EMAIL_SETTINGS, CatalogItem, MapSettings } from './types.ts';
 import { generateId } from './utils.ts';
-import { addFiles, deleteFiles, clearAndAddFiles } from './db.ts';
-
-// Helper to generate sample data
-const getSampleContacts = (): Contact[] => {
-    const today = new Date();
-    const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
-    const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
-    const nextWeek = new Date(today); nextWeek.setDate(today.getDate() + 5);
-
-    const fmt = (d: Date) => d.toISOString().split('T')[0];
-
-    return [
-        {
-            id: 'SAMPLE-1',
-            name: 'Alice Johnson',
-            email: 'alice.j@example.com',
-            phone: '(555) 123-4567',
-            address: '123 Maple Drive, Springfield',
-            photoUrl: '',
-            files: [],
-            customFields: [],
-            doorProfiles: [
-                {
-                    id: 'DP-1',
-                    dimensions: '16x7',
-                    doorType: 'Sectional',
-                    springSystem: 'Torsion',
-                    springSize: '.250x2x32',
-                    springs: [{ id: 'S-1', size: '.250x2x32' }, { id: 'S-2', size: '.250x2x32' }],
-                    openerBrand: 'LiftMaster',
-                    openerModel: '8550W',
-                    doorInstallDate: '2021-05-12',
-                    springInstallDate: '2021-05-12',
-                    openerInstallDate: '2021-05-12'
-                }
-            ],
-            jobTickets: [
-                {
-                    id: 'JOB-101',
-                    date: fmt(today),
-                    time: '09:00',
-                    status: 'In Progress',
-                    notes: 'Kitchen renovation - Day 1. Demolition and prep.',
-                    parts: [],
-                    laborCost: 0,
-                    createdAt: new Date().toISOString(),
-                    salesTaxRate: 0,
-                    processingFeeRate: 0
-                }
-            ]
-        },
-        {
-            id: 'SAMPLE-2',
-            name: 'Bob Smith',
-            email: 'bob.smith@example.com',
-            phone: '(555) 987-6543',
-            address: '456 Oak Lane, Springfield',
-            photoUrl: '',
-            files: [],
-            customFields: [{ id: 'CF-1', label: 'Referred By', value: 'Yelp' }],
-            doorProfiles: [
-                {
-                    id: 'DP-2',
-                    dimensions: '9x8',
-                    doorType: 'One-piece',
-                    springSystem: 'Extension',
-                    springSize: '',
-                    springs: [{ id: 'S-3', size: 'Extension 140lb' }],
-                    openerBrand: 'Genie',
-                    openerModel: 'Aladdin Connect',
-                    doorInstallDate: 'Original',
-                    springInstallDate: 'Unknown',
-                    openerInstallDate: '2019-11-03'
-                },
-                {
-                    id: 'DP-3',
-                    dimensions: '16x7',
-                    doorType: 'Sectional',
-                    springSystem: 'Torsion',
-                    springSize: '.218x1.75x28',
-                    springs: [{ id: 'S-4', size: '.218x1.75x28' }],
-                    openerBrand: 'Chamberlain',
-                    openerModel: 'B970',
-                    doorInstallDate: '2020-02-15',
-                    springInstallDate: '2020-02-15',
-                    openerInstallDate: '2020-02-15'
-                }
-            ],
-            jobTickets: [
-                {
-                    id: 'JOB-102',
-                    date: fmt(tomorrow),
-                    time: '14:00',
-                    status: 'Scheduled',
-                    notes: 'HVAC maintenance check.',
-                    parts: [{ id: 'P-1', name: 'Filter', quantity: 1, cost: 25 }],
-                    laborCost: 150,
-                    salesTaxRate: 8,
-                    processingFeeRate: 0,
-                    createdAt: new Date().toISOString()
-                }
-            ]
-        },
-         {
-            id: 'SAMPLE-3',
-            name: 'Charlie Brown',
-            email: 'charlie.b@example.com',
-            phone: '(555) 555-5555',
-            address: '789 Pine Street, Springfield',
-            photoUrl: '',
-            files: [],
-            customFields: [],
-            jobTickets: [
-                {
-                    id: 'JOB-103',
-                    date: fmt(yesterday),
-                    time: '11:30',
-                    status: 'Completed',
-                    notes: 'Emergency plumbing repair. Replaced burst pipe.',
-                    parts: [{ id: 'P-2', name: 'Copper Pipe', quantity: 2, cost: 15 }, { id: 'P-3', name: 'Fittings', quantity: 4, cost: 5 }],
-                    laborCost: 200,
-                    salesTaxRate: 8,
-                    processingFeeRate: 2.9,
-                    createdAt: new Date().toISOString()
-                },
-                {
-                    id: 'JOB-104',
-                    date: fmt(nextWeek),
-                    status: 'Estimate Scheduled',
-                    notes: 'Quote for bathroom remodel.',
-                    parts: [],
-                    laborCost: 0,
-                    salesTaxRate: 0,
-                    processingFeeRate: 0,
-                    createdAt: new Date().toISOString()
-                }
-            ]
-        }
-    ];
-};
-
-
-// Helper to get initial state from local storage
-const getInitialState = <T,>(key: string, defaultValue: T): T => {
-  const saved = localStorage.getItem(key);
-  if (saved) {
-    try {
-      return JSON.parse(saved);
-    } catch (e) {
-      console.error(`Error parsing ${key}`, e);
-    }
-  }
-  return defaultValue;
-};
 
 function App() {
-  // State definitions
-  const [contacts, setContacts] = useState<Contact[]>(() => {
-      const saved = localStorage.getItem('contacts');
-      if (saved) {
-          try { 
-            const parsed = JSON.parse(saved);
-            // Robust check to ensure we have an array
-            if(Array.isArray(parsed)) return parsed; 
-          } catch(e) { console.error(e); }
-      }
-      return getSampleContacts();
-  });
+  // Auth State
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
-  const [viewState, setViewState] = useState<ViewState>({ type: 'dashboard' });
-  const [defaultFields, setDefaultFields] = useState<DefaultFieldSetting[]>(() => getInitialState('defaultFields', []));
-  const [businessInfo, setBusinessInfo] = useState<BusinessInfo>(() => getInitialState('businessInfo', { name: '', address: '', phone: '', email: '', logoUrl: '' }));
-  const [emailSettings, setEmailSettings] = useState<EmailSettings>(() => getInitialState('emailSettings', DEFAULT_EMAIL_SETTINGS));
-  const [jobTemplates, setJobTemplates] = useState<JobTemplate[]>(() => getInitialState('jobTemplates', []));
-  const [partsCatalog, setPartsCatalog] = useState<CatalogItem[]>(() => getInitialState('partsCatalog', []));
+  // App Data State
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  
+  // Settings State (Synced to one document 'settings' in Firestore)
+  const [defaultFields, setDefaultFields] = useState<DefaultFieldSetting[]>([]);
+  const [businessInfo, setBusinessInfo] = useState<BusinessInfo>({ name: '', address: '', phone: '', email: '', logoUrl: '' });
+  const [emailSettings, setEmailSettings] = useState<EmailSettings>(DEFAULT_EMAIL_SETTINGS);
+  const [jobTemplates, setJobTemplates] = useState<JobTemplate[]>([]);
+  const [partsCatalog, setPartsCatalog] = useState<CatalogItem[]>([]);
   const [enabledStatuses, setEnabledStatuses] = useState<Record<JobStatus, boolean>>(() => {
       const defaults = {} as Record<JobStatus, boolean>;
       ALL_JOB_STATUSES.forEach(s => defaults[s] = true);
-      return getInitialState('enabledStatuses', defaults);
+      return defaults;
   });
-  const [autoBackupEnabled, setAutoBackupEnabled] = useState<boolean>(() => getInitialState('autoBackupEnabled', false));
-  const [lastAutoBackup, setLastAutoBackup] = useState<{ timestamp: string; data: string } | null>(() => getInitialState('lastAutoBackup', null));
-  const [currentTheme, setCurrentTheme] = useState<'light' | 'dark' | 'system'>(() => getInitialState('theme', 'system'));
-  const [autoCalendarExportEnabled, setAutoCalendarExportEnabled] = useState<boolean>(() => getInitialState('autoCalendarExportEnabled', false));
-  const [showContactPhotos, setShowContactPhotos] = useState<boolean>(() => getInitialState('showContactPhotos', true));
-  const [mapSettings, setMapSettings] = useState<MapSettings>(() => getInitialState('mapSettings', { apiKey: '', homeAddress: '' }));
   
+  // Initialize Map Settings with Env Var fallback
+  const [mapSettings, setMapSettings] = useState<MapSettings>(() => {
+      // Access safe getter via firebase.ts logic or direct meta access
+      const env = (import.meta as any).env || (window as any).process?.env || {};
+      return { 
+          apiKey: env.VITE_GOOGLE_MAPS_API_KEY || '', 
+          homeAddress: '' 
+      };
+  });
+  
+  const [showContactPhotos, setShowContactPhotos] = useState<boolean>(true);
+
+  // Local UI State (Not Synced)
+  const [viewState, setViewState] = useState<ViewState>({ type: 'dashboard' });
+  const [autoBackupEnabled, setAutoBackupEnabled] = useState<boolean>(false); // Deprecated/Local only
+  const [lastAutoBackup, setLastAutoBackup] = useState<{ timestamp: string; data: string } | null>(null);
+  const [currentTheme, setCurrentTheme] = useState<'light' | 'dark' | 'system'>('system');
+  const [autoCalendarExportEnabled, setAutoCalendarExportEnabled] = useState<boolean>(false);
   const [contactSelectorDate, setContactSelectorDate] = useState<Date | null>(null);
+  
+  // Setup Screen State
+  const [configInput, setConfigInput] = useState('');
 
-  // Persist state changes
-  useEffect(() => localStorage.setItem('contacts', JSON.stringify(contacts)), [contacts]);
-  useEffect(() => localStorage.setItem('defaultFields', JSON.stringify(defaultFields)), [defaultFields]);
-  useEffect(() => localStorage.setItem('businessInfo', JSON.stringify(businessInfo)), [businessInfo]);
-  useEffect(() => localStorage.setItem('emailSettings', JSON.stringify(emailSettings)), [emailSettings]);
-  useEffect(() => localStorage.setItem('jobTemplates', JSON.stringify(jobTemplates)), [jobTemplates]);
-  useEffect(() => localStorage.setItem('partsCatalog', JSON.stringify(partsCatalog)), [partsCatalog]);
-  useEffect(() => localStorage.setItem('enabledStatuses', JSON.stringify(enabledStatuses)), [enabledStatuses]);
-  useEffect(() => localStorage.setItem('autoBackupEnabled', JSON.stringify(autoBackupEnabled)), [autoBackupEnabled]);
-  useEffect(() => localStorage.setItem('lastAutoBackup', JSON.stringify(lastAutoBackup)), [lastAutoBackup]);
-  useEffect(() => localStorage.setItem('theme', JSON.stringify(currentTheme)), [currentTheme]);
-  useEffect(() => localStorage.setItem('autoCalendarExportEnabled', JSON.stringify(autoCalendarExportEnabled)), [autoCalendarExportEnabled]);
-  useEffect(() => localStorage.setItem('showContactPhotos', JSON.stringify(showContactPhotos)), [showContactPhotos]);
-  useEffect(() => localStorage.setItem('mapSettings', JSON.stringify(mapSettings)), [mapSettings]);
+  // 1. Auth Listener
+  useEffect(() => {
+    if (!isFirebaseConfigured || !auth) {
+        setAuthLoading(false);
+        return;
+    }
 
-  // Theme handling
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+        setUser(currentUser);
+        setAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // 2. Data Listeners (Run only when user is logged in)
+  useEffect(() => {
+    if (!user || !db) return;
+
+    // A. Contacts Listener
+    const contactsRef = collection(db, 'users', user.uid, 'contacts');
+    const unsubContacts = onSnapshot(contactsRef, (snapshot) => {
+        const loadedContacts: Contact[] = [];
+        snapshot.forEach(doc => {
+            loadedContacts.push(doc.data() as Contact);
+        });
+        setContacts(loadedContacts);
+    });
+
+    // B. Settings Listener (Single Document)
+    const settingsRef = doc(db, 'users', user.uid, 'settings', 'general');
+    const unsubSettings = onSnapshot(settingsRef, (docSnap) => {
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.defaultFields) setDefaultFields(data.defaultFields);
+            if (data.businessInfo) setBusinessInfo(data.businessInfo);
+            if (data.emailSettings) setEmailSettings(data.emailSettings);
+            if (data.jobTemplates) setJobTemplates(data.jobTemplates);
+            if (data.partsCatalog) setPartsCatalog(data.partsCatalog);
+            if (data.enabledStatuses) setEnabledStatuses(data.enabledStatuses);
+            
+            // Merge stored map settings with env var if stored key is empty
+            if (data.mapSettings) {
+                const env = (import.meta as any).env || (window as any).process?.env || {};
+                setMapSettings({
+                    ...data.mapSettings,
+                    apiKey: data.mapSettings.apiKey || env.VITE_GOOGLE_MAPS_API_KEY || ''
+                });
+            }
+            
+            if (data.showContactPhotos !== undefined) setShowContactPhotos(data.showContactPhotos);
+        }
+    });
+
+    return () => {
+        unsubContacts();
+        unsubSettings();
+    };
+  }, [user]);
+
+  // 3. Theme Handling
   useEffect(() => {
       const applyTheme = () => {
           const isDark = currentTheme === 'dark' || (currentTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -233,18 +140,220 @@ function App() {
       return () => mediaQuery.removeEventListener('change', applyTheme);
   }, [currentTheme]);
 
-  // Auto Backup Logic
-  useEffect(() => {
-      if (autoBackupEnabled) {
-          const data = JSON.stringify({ contacts, defaultFields, businessInfo, emailSettings, jobTemplates, partsCatalog, enabledStatuses, showContactPhotos, mapSettings });
-          // Only update if data changed (simple string comparison for now)
-          if (!lastAutoBackup || lastAutoBackup.data !== data) {
-              setLastAutoBackup({ timestamp: new Date().toISOString(), data });
+  // --- Actions (Firestore Writes) ---
+
+  // Helper to save all settings
+  const saveSettings = async (updates: any) => {
+      if (!user || !db || !storage) return;
+
+      try {
+        // Handle Logo Upload if it's a new Base64 string
+        if (updates.businessInfo && updates.businessInfo.logoUrl && updates.businessInfo.logoUrl.startsWith('data:')) {
+            const logoRef = ref(storage, `users/${user.uid}/settings/logo_${Date.now()}`);
+            const res = await fetch(updates.businessInfo.logoUrl);
+            const blob = await res.blob();
+            await uploadBytes(logoRef, blob);
+            updates.businessInfo.logoUrl = await getDownloadURL(logoRef);
+        }
+
+        const settingsRef = doc(db, 'users', user.uid, 'settings', 'general');
+        await setDoc(settingsRef, updates, { merge: true });
+      } catch (error) {
+          console.error("Error saving settings:", error);
+          alert("Failed to save settings. Check internet connection.");
+      }
+  };
+
+  const handleSaveContact = async (contactData: Omit<Contact, 'id'>) => {
+    if (!user || !db || !storage) return;
+    
+    let contactId = '';
+    if (viewState.type === 'edit_form' && selectedContact) {
+        contactId = selectedContact.id;
+    } else {
+        contactId = generateId();
+    }
+
+    // Prepare data for upload
+    let finalPhotoUrl = contactData.photoUrl;
+    let finalFiles = [...contactData.files];
+
+    try {
+        // 1. Upload Profile Photo if Base64
+        if (finalPhotoUrl && finalPhotoUrl.startsWith('data:')) {
+             const photoRef = ref(storage, `users/${user.uid}/contacts/${contactId}/profile_photo_${Date.now()}`);
+             const res = await fetch(finalPhotoUrl);
+             const blob = await res.blob();
+             await uploadBytes(photoRef, blob);
+             finalPhotoUrl = await getDownloadURL(photoRef);
+        }
+
+        // 2. Upload Attachments if Base64
+        const processedFiles: FileAttachment[] = [];
+        for (const file of finalFiles) {
+            if (file.dataUrl && file.dataUrl.startsWith('data:')) {
+                 const fileRef = ref(storage, `users/${user.uid}/contacts/${contactId}/${file.id}_${file.name}`);
+                 const res = await fetch(file.dataUrl);
+                 const blob = await res.blob();
+                 await uploadBytes(fileRef, blob);
+                 const url = await getDownloadURL(fileRef);
+                 processedFiles.push({ ...file, dataUrl: url });
+            } else {
+                processedFiles.push(file);
+            }
+        }
+
+        const contactToSave: Contact = { 
+            ...contactData, 
+            id: contactId,
+            photoUrl: finalPhotoUrl,
+            files: processedFiles
+        };
+
+        // 3. Save Document
+        await setDoc(doc(db, 'users', user.uid, 'contacts', contactId), contactToSave);
+        
+        // Navigation
+        if (viewState.type === 'edit_form') {
+            setViewState({ type: 'detail', id: contactId });
+        } else {
+            // If coming from calendar flow
+            if (viewState.type === 'new_form' && viewState.initialJobDate) {
+                const createdTicket = contactToSave.jobTickets.find(t => t.date === viewState.initialJobDate);
+                if (createdTicket) {
+                    setViewState({ type: 'detail', id: contactId, openJobId: createdTicket.id });
+                } else {
+                    setViewState({ type: 'detail', id: contactId, initialJobDate: viewState.initialJobDate });
+                }
+            } else {
+                setViewState({ type: 'detail', id: contactId });
+            }
+        }
+    } catch (error) {
+        console.error("Error saving contact:", error);
+        alert("Failed to save contact to cloud. Please ensure you have upgraded your Firebase project to the Blaze plan (Free Tier available) to use Storage.");
+    }
+  };
+
+  const handleDeleteContact = async (id: string) => {
+      if (!user || !db) return;
+      if (window.confirm('Are you sure you want to delete this contact?')) {
+          try {
+              // Note: In a production app, you would list and delete all files in storage bucket for this contact
+              // For now, we just delete the database record to prevent complexity
+              await deleteDoc(doc(db, 'users', user.uid, 'contacts', id));
+              setViewState({ type: 'list' });
+          } catch (error) {
+              console.error("Error deleting contact:", error);
+              alert("Failed to delete contact.");
           }
       }
-  }, [contacts, defaultFields, businessInfo, emailSettings, jobTemplates, partsCatalog, enabledStatuses, showContactPhotos, mapSettings, autoBackupEnabled]); 
+  };
 
-  // Derived state
+  const handleAddFilesToContact = async (contactId: string, files: FileAttachment[]) => {
+      if (!user || !db || !storage) return;
+      const contact = contacts.find(c => c.id === contactId);
+      if (!contact) return;
+
+      try {
+        const uploadedFiles: FileAttachment[] = [];
+        
+        // Upload each file to Firebase Storage
+        for (const file of files) {
+             if (file.dataUrl && file.dataUrl.startsWith('data:')) {
+                 const res = await fetch(file.dataUrl);
+                 const blob = await res.blob();
+                 
+                 const fileRef = ref(storage, `users/${user.uid}/contacts/${contactId}/${file.id}_${file.name}`);
+                 await uploadBytes(fileRef, blob);
+                 const downloadURL = await getDownloadURL(fileRef);
+                 
+                 uploadedFiles.push({
+                     ...file,
+                     dataUrl: downloadURL
+                 });
+             } else {
+                 uploadedFiles.push(file);
+             }
+        }
+
+        const updatedContact = { ...contact, files: [...contact.files, ...uploadedFiles] };
+        await setDoc(doc(db, 'users', user.uid, 'contacts', contactId), updatedContact);
+        
+      } catch (error) {
+          console.error("Failed to upload files:", error);
+          alert("Failed to upload attachments. Please ensure billing is enabled for Cloud Storage.");
+      }
+  };
+
+  const handleUpdateContactJobTickets = async (contactId: string, jobTickets: JobTicket[]) => {
+      if (!user || !db) return;
+      const contactRef = doc(db, 'users', user.uid, 'contacts', contactId);
+      await updateDoc(contactRef, { jobTickets });
+  };
+  
+  // Restore Backup (Local File Import -> Overwrite Cloud)
+  const handleRestoreBackup = async (fileContent: string) => {
+      if (!user || !db) return;
+      try {
+          if(!window.confirm("Restoring a backup will overwrite your cloud data. Are you sure?")) return;
+
+          const data = JSON.parse(fileContent);
+
+          // Update Settings
+          const settingsUpdates: any = {};
+          if (data.defaultFields) settingsUpdates.defaultFields = data.defaultFields;
+          if (data.businessInfo) settingsUpdates.businessInfo = data.businessInfo;
+          if (data.emailSettings) settingsUpdates.emailSettings = data.emailSettings;
+          if (data.jobTemplates) settingsUpdates.jobTemplates = data.jobTemplates;
+          if (data.partsCatalog) settingsUpdates.partsCatalog = data.partsCatalog;
+          if (data.enabledStatuses) settingsUpdates.enabledStatuses = data.enabledStatuses;
+          if (data.mapSettings) settingsUpdates.mapSettings = data.mapSettings;
+          if (data.showContactPhotos !== undefined) settingsUpdates.showContactPhotos = data.showContactPhotos;
+          
+          await saveSettings(settingsUpdates);
+          
+          // Update Contacts (Batch write ideally, but simple loop for now)
+          if (data.contacts) {
+              for (const c of data.contacts) {
+                  await setDoc(doc(db, 'users', user.uid, 'contacts', c.id), c);
+              }
+          }
+          
+          alert('Backup restored successfully to cloud!');
+      } catch (error) {
+          console.error('Error restoring backup:', error);
+          alert('Failed to restore backup. Invalid file format.');
+      }
+  };
+
+  const handleSignOut = async () => {
+      if (!auth) return;
+      try {
+          await signOut(auth);
+      } catch (error) {
+          console.error("Error signing out:", error);
+      }
+  };
+  
+  const handleSaveConfig = () => {
+      const lines = configInput.split('\n');
+      const config: Record<string, string> = {};
+      lines.forEach(line => {
+          const parts = line.split('=');
+          if (parts.length >= 2) {
+              const key = parts[0].trim();
+              const value = parts.slice(1).join('=').trim().replace(/^["']|["']$/g, '');
+              if (key && value) config[key] = value;
+          }
+      });
+      
+      localStorage.setItem('firebase_config_override', JSON.stringify(config));
+      window.location.reload();
+  };
+
+  const appStateForBackup = { contacts, defaultFields, businessInfo, emailSettings, jobTemplates, partsCatalog, enabledStatuses, showContactPhotos, mapSettings };
+
   const selectedContact = useMemo(() => {
     if (viewState.type === 'detail' || viewState.type === 'edit_form') {
         return contacts.find(c => c.id === viewState.id) || null;
@@ -252,126 +361,56 @@ function App() {
     return null;
   }, [contacts, viewState]);
 
-  // Actions
-  const handleSaveContact = async (contactData: Omit<Contact, 'id'>) => {
-    // 1. Save files with content to IndexedDB
-    const filesToSave = contactData.files.filter(f => f.dataUrl);
-    if (filesToSave.length > 0) {
-        try {
-            await addFiles(filesToSave);
-        } catch (error) {
-            console.error("Failed to save files to DB", error);
-            alert("Failed to save attachments to database. Please try again.");
-            return;
-        }
-    }
+  // --- Check for missing configuration FIRST ---
+  if (!isFirebaseConfigured) {
+      return (
+          <div className="min-h-screen bg-slate-100 dark:bg-slate-900 flex flex-col justify-center items-center p-4">
+              <div className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow-lg max-w-lg w-full border border-slate-200 dark:border-slate-700">
+                  <div className="flex justify-center mb-6">
+                      <div className="bg-amber-100 dark:bg-amber-900/30 p-4 rounded-full">
+                          <SettingsIcon className="w-12 h-12 text-amber-600 dark:text-amber-400" />
+                      </div>
+                  </div>
+                  <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-2 text-center">App Configuration</h1>
+                  <p className="text-slate-500 dark:text-slate-400 mb-6 text-center">
+                      The app requires Firebase keys to run. In this preview environment, environment variables may not be loaded automatically.
+                  </p>
+                  
+                  <div className="mb-4">
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                          Paste your .env content here:
+                      </label>
+                      <textarea
+                          value={configInput}
+                          onChange={(e) => setConfigInput(e.target.value)}
+                          className="w-full h-48 p-3 border border-slate-300 dark:border-slate-600 rounded-md font-mono text-xs bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:ring-sky-500 focus:border-sky-500"
+                          placeholder="VITE_FIREBASE_API_KEY=AIza..."
+                      ></textarea>
+                      <p className="mt-2 text-xs text-slate-500 dark:text-slate-500">
+                          Keys found: 
+                          {configInput.includes('VITE_FIREBASE_API_KEY') ? <span className="text-green-600 dark:text-green-400 ml-1">API Key ✓</span> : <span className="text-slate-400 ml-1">...</span>}
+                      </p>
+                  </div>
 
-    // 2. Strip dataUrl from files before saving to state/localStorage to avoid quota limits
-    const filesForState = contactData.files.map(f => {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { dataUrl, ...rest } = f;
-        return rest;
-    });
+                  <button 
+                    onClick={handleSaveConfig} 
+                    className="w-full px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-md font-medium transition-colors shadow-sm"
+                  >
+                      Save Configuration & Restart
+                  </button>
+              </div>
+          </div>
+      );
+  }
 
-    const cleanContactData = { ...contactData, files: filesForState };
+  // Render
+  if (authLoading) {
+      return <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-900 text-slate-500">Loading...</div>;
+  }
 
-    if (viewState.type === 'edit_form' && selectedContact) {
-        const updatedContact = { ...cleanContactData, id: selectedContact.id };
-        setContacts(contacts.map(c => c.id === selectedContact.id ? updatedContact : c));
-        setViewState({ type: 'detail', id: selectedContact.id });
-    } else {
-        const newContact = { ...cleanContactData, id: generateId() };
-        setContacts([...contacts, newContact]);
-        
-        // If we are coming from the calendar flow
-        if (viewState.type === 'new_form' && viewState.initialJobDate) {
-            const createdTicket = newContact.jobTickets.find(t => t.date === viewState.initialJobDate);
-            if (createdTicket) {
-                setViewState({ type: 'detail', id: newContact.id, openJobId: createdTicket.id });
-            } else {
-                setViewState({ type: 'detail', id: newContact.id, initialJobDate: viewState.initialJobDate });
-            }
-        } else {
-            setViewState({ type: 'detail', id: newContact.id });
-        }
-    }
-  };
-
-  const handleDeleteContact = (id: string) => {
-      if (window.confirm('Are you sure you want to delete this contact?')) {
-          const contact = contacts.find(c => c.id === id);
-          if (contact && contact.files) {
-              deleteFiles(contact.files.map(f => f.id));
-          }
-          setContacts(contacts.filter(c => c.id !== id));
-          setViewState({ type: 'list' });
-      }
-  };
-
-  const handleAddFilesToContact = async (contactId: string, files: FileAttachment[]) => {
-      try {
-        await addFiles(files);
-        const filesForState = files.map(f => {
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { dataUrl, ...rest } = f;
-            return rest;
-        });
-
-        setContacts(contacts.map(c => {
-            if (c.id === contactId) {
-                return { ...c, files: [...c.files, ...filesForState] };
-            }
-            return c;
-        }));
-      } catch (error) {
-          console.error("Failed to add files:", error);
-          alert("Failed to save attachments.");
-      }
-  };
-
-  const handleUpdateContactJobTickets = (contactId: string, jobTickets: JobTicket[]) => {
-      setContacts(contacts.map(c => {
-          if (c.id === contactId) {
-              return { ...c, jobTickets };
-          }
-          return c;
-      }));
-  };
-  
-  const handleRestoreBackup = async (fileContent: string) => {
-      try {
-          const data = JSON.parse(fileContent);
-          if (data.files) await clearAndAddFiles(data.files);
-
-          if (data.defaultFields) setDefaultFields(data.defaultFields);
-          if (data.businessInfo) setBusinessInfo(data.businessInfo);
-          if (data.emailSettings) setEmailSettings(data.emailSettings);
-          if (data.jobTemplates) setJobTemplates(data.jobTemplates);
-          if (data.partsCatalog) setPartsCatalog(data.partsCatalog);
-          if (data.enabledStatuses) setEnabledStatuses(data.enabledStatuses);
-          if (data.showContactPhotos !== undefined) setShowContactPhotos(data.showContactPhotos);
-          if (data.mapSettings) setMapSettings(data.mapSettings);
-          
-          if (data.contacts) {
-              const cleanContacts = data.contacts.map((c: Contact) => ({
-                  ...c,
-                  files: c.files ? c.files.map((f: FileAttachment) => {
-                      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                      const { dataUrl, ...rest } = f;
-                      return rest;
-                  }) : []
-              }));
-              setContacts(cleanContacts);
-          }
-          
-          alert('Backup restored successfully!');
-      } catch (error) {
-          console.error('Error restoring backup:', error);
-          alert('Failed to restore backup. Invalid file format.');
-      }
-  };
-
-  const appStateForBackup = { contacts, defaultFields, businessInfo, emailSettings, jobTemplates, partsCatalog, enabledStatuses, showContactPhotos, mapSettings };
+  if (!user) {
+      return <Login />;
+  }
 
   const renderView = () => {
       switch (viewState.type) {
@@ -439,8 +478,16 @@ function App() {
           case 'settings':
               return <Settings 
                   defaultFields={defaultFields}
-                  onAddDefaultField={(label) => setDefaultFields([...defaultFields, { id: generateId(), label }])}
-                  onDeleteDefaultField={(id) => setDefaultFields(defaultFields.filter(f => f.id !== id))}
+                  onAddDefaultField={(label) => {
+                      const newFields = [...defaultFields, { id: generateId(), label }];
+                      setDefaultFields(newFields);
+                      saveSettings({ defaultFields: newFields });
+                  }}
+                  onDeleteDefaultField={(id) => {
+                      const newFields = defaultFields.filter(f => f.id !== id);
+                      setDefaultFields(newFields);
+                      saveSettings({ defaultFields: newFields });
+                  }}
                   onBack={() => setViewState({ type: 'dashboard' })}
                   appStateForBackup={appStateForBackup}
                   autoBackupEnabled={autoBackupEnabled}
@@ -448,27 +495,65 @@ function App() {
                   lastAutoBackup={lastAutoBackup}
                   onRestoreBackup={handleRestoreBackup}
                   businessInfo={businessInfo}
-                  onUpdateBusinessInfo={setBusinessInfo}
+                  onUpdateBusinessInfo={(info) => {
+                      setBusinessInfo(info);
+                      saveSettings({ businessInfo: info });
+                  }}
                   emailSettings={emailSettings}
-                  onUpdateEmailSettings={setEmailSettings}
+                  onUpdateEmailSettings={(settings) => {
+                      setEmailSettings(settings);
+                      saveSettings({ emailSettings: settings });
+                  }}
                   currentTheme={currentTheme}
                   onUpdateTheme={setCurrentTheme}
                   jobTemplates={jobTemplates}
-                  onAddJobTemplate={(t) => setJobTemplates([...jobTemplates, { ...t, id: generateId() }])}
-                  onUpdateJobTemplate={(id, t) => setJobTemplates(jobTemplates.map(jt => jt.id === id ? { ...t, id } : jt))}
-                  onDeleteJobTemplate={(id) => setJobTemplates(jobTemplates.filter(jt => jt.id !== id))}
+                  onAddJobTemplate={(t) => {
+                      const newTemplates = [...jobTemplates, { ...t, id: generateId() }];
+                      setJobTemplates(newTemplates);
+                      saveSettings({ jobTemplates: newTemplates });
+                  }}
+                  onUpdateJobTemplate={(id, t) => {
+                      const newTemplates = jobTemplates.map(jt => jt.id === id ? { ...t, id } : jt);
+                      setJobTemplates(newTemplates);
+                      saveSettings({ jobTemplates: newTemplates });
+                  }}
+                  onDeleteJobTemplate={(id) => {
+                      const newTemplates = jobTemplates.filter(jt => jt.id !== id);
+                      setJobTemplates(newTemplates);
+                      saveSettings({ jobTemplates: newTemplates });
+                  }}
                   partsCatalog={partsCatalog}
-                  onAddCatalogItem={(item) => setPartsCatalog([...partsCatalog, { ...item, id: generateId() }])}
-                  onDeleteCatalogItem={(id) => setPartsCatalog(partsCatalog.filter(i => i.id !== id))}
+                  onAddCatalogItem={(item) => {
+                      const newCatalog = [...partsCatalog, { ...item, id: generateId() }];
+                      setPartsCatalog(newCatalog);
+                      saveSettings({ partsCatalog: newCatalog });
+                  }}
+                  onDeleteCatalogItem={(id) => {
+                      const newCatalog = partsCatalog.filter(i => i.id !== id);
+                      setPartsCatalog(newCatalog);
+                      saveSettings({ partsCatalog: newCatalog });
+                  }}
                   enabledStatuses={enabledStatuses}
-                  onToggleJobStatus={(status, enabled) => setEnabledStatuses({ ...enabledStatuses, [status]: enabled })}
+                  onToggleJobStatus={(status, enabled) => {
+                      const newStatuses = { ...enabledStatuses, [status]: enabled };
+                      setEnabledStatuses(newStatuses);
+                      saveSettings({ enabledStatuses: newStatuses });
+                  }}
                   contacts={contacts}
                   autoCalendarExportEnabled={autoCalendarExportEnabled}
                   onToggleAutoCalendarExport={setAutoCalendarExportEnabled}
                   showContactPhotos={showContactPhotos}
-                  onToggleShowContactPhotos={setShowContactPhotos}
+                  onToggleShowContactPhotos={(enabled) => {
+                      setShowContactPhotos(enabled);
+                      saveSettings({ showContactPhotos: enabled });
+                  }}
                   mapSettings={mapSettings}
-                  onUpdateMapSettings={setMapSettings}
+                  onUpdateMapSettings={(settings) => {
+                      setMapSettings(settings);
+                      saveSettings({ mapSettings: settings });
+                  }}
+                  user={user}
+                  onSignOut={handleSignOut}
               />;
           case 'invoice':
               const invoiceContact = contacts.find(c => c.id === viewState.contactId);
