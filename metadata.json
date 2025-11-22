@@ -1,0 +1,8 @@
+{
+  "name": "Copy of Business Contacts Manager",
+  "description": "A modern and sleek business contacts application that allows users to manage contact details, including names, numbers, addresses, and emails. Users can also upload photos and files for each contact and initiate calls, texts, or emails directly from the app.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
