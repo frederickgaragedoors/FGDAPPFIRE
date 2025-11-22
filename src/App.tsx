@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { onAuthStateChanged, User } from 'firebase/auth';
+import { onAuthStateChanged, User, signOut } from 'firebase/auth';
 import { collection, doc, onSnapshot, setDoc, deleteDoc, updateDoc, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { auth, db, storage } from './firebase.ts';
@@ -317,6 +317,14 @@ function App() {
       }
   };
 
+  const handleSignOut = async () => {
+      try {
+          await signOut(auth);
+      } catch (error) {
+          console.error("Error signing out:", error);
+      }
+  };
+
   const appStateForBackup = { contacts, defaultFields, businessInfo, emailSettings, jobTemplates, partsCatalog, enabledStatuses, showContactPhotos, mapSettings };
 
   const selectedContact = useMemo(() => {
@@ -475,6 +483,8 @@ function App() {
                       setMapSettings(settings);
                       saveSettings({ mapSettings: settings });
                   }}
+                  user={user}
+                  onSignOut={handleSignOut}
               />;
           case 'invoice':
               const invoiceContact = contacts.find(c => c.id === viewState.contactId);
