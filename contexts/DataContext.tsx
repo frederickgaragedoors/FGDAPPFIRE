@@ -356,7 +356,9 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
         
         if (!user || !db) return;
         const contactRef = doc(db, 'users', user.uid, 'contacts', contactId);
-        await updateDoc(contactRef, { jobTickets: updatedTickets });
+        // FIX: Use setDoc to overwrite the entire document. This is more robust for PWAs with offline persistence
+        // than using updateDoc for a nested array, which can cause sync issues.
+        await setDoc(contactRef, updatedContact);
     };
 
     const saveSettings = async (updates: any) => {
