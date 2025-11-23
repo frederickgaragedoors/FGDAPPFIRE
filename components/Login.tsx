@@ -1,18 +1,27 @@
-
 import React, { useState, useEffect } from 'react';
+import { auth as authInstance, googleProvider } from '../firebase.ts';
 import { signInWithPopup } from 'firebase/auth';
-import { auth, googleProvider } from '../firebase.ts';
-import { UserCircleIcon, ClipboardListIcon } from './icons.tsx';
+import { UserCircleIcon, SettingsIcon, ShareIcon } from './icons.tsx';
 
-const Login: React.FC = () => {
+interface LoginProps {
+    onGuestLogin: () => void;
+}
+
+const Login: React.FC<LoginProps> = ({ onGuestLogin }) => {
   const [error, setError] = useState<string | null>(null);
   const [unauthorizedDomain, setUnauthorizedDomain] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [currentHostname, setCurrentHostname] = useState('');
+  const [isIframe, setIsIframe] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
         setCurrentHostname(window.location.hostname);
+        try {
+            setIsIframe(window.self !== window.top);
+        } catch (e) {
+            setIsIframe(true);
+        }
     }
   }, []);
 
@@ -22,10 +31,11 @@ const Login: React.FC = () => {
       setError(null);
       setUnauthorizedDomain(null);
       
-      if (!auth || !googleProvider) {
+      if (!authInstance || !googleProvider) {
         throw new Error("Firebase Auth not initialized.");
       }
-      await signInWithPopup(auth, googleProvider);
+      
+      await signInWithPopup(authInstance, googleProvider);
     } catch (err: any) {
       console.error("Login failed", err);
       if (err.code === 'auth/unauthorized-domain') {
@@ -33,12 +43,22 @@ const Login: React.FC = () => {
       } else if (err.code === 'auth/popup-closed-by-user') {
         setError(null);
       } else {
-        // Show full error for debugging if it's not the specific domain issue
         setError(`Failed to sign in: ${err.message} (${err.code})`);
       }
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleResetConfig = () => {
+      if (confirm("This will clear the saved API keys and reload the app. You will need to enter them again. Continue?")) {
+          localStorage.removeItem('firebase_config_override');
+          window.location.reload();
+      }
+  };
+
+  const openInNewTab = () => {
+      window.open(window.location.href, '_blank');
   };
 
   return (
@@ -51,9 +71,8 @@ const Login: React.FC = () => {
         </div>
         
         <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-2">Business Contacts Manager</h1>
-        <p className="text-slate-500 dark:text-slate-400 mb-8">Sign in to sync your contacts, jobs, and files across all your devices.</p>
+        <p className="text-slate-500 dark:text-slate-400 mb-8">Sign in to sync your data, or continue as a guest to save data on this device.</p>
 
-        {/* Specific Instruction Block for Domain Error */}
         {unauthorizedDomain && (
            <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-left animate-fadeIn">
               <h3 className="font-bold text-amber-800 dark:text-amber-200 mb-2">Configuration Required</h3>
@@ -80,26 +99,58 @@ const Login: React.FC = () => {
           </div>
         )}
 
-        <button
-          onClick={handleLogin}
-          disabled={isLoading}
-          className="w-full flex items-center justify-center px-4 py-3 bg-white hover:bg-slate-50 text-slate-700 font-medium border border-slate-300 rounded-lg shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isLoading ? (
-            <span>Signing in...</span>
-          ) : (
-            <>
-              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5 mr-3" />
-              Sign in with Google
-            </>
-          )}
-        </button>
-        
-        <p className="mt-6 text-xs text-slate-400 dark:text-slate-500">
-            Securely powered by Google Firebase
-        </p>
+        {isIframe ? (
+            <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                <p className="text-sm text-blue-800 dark:text-blue-200 mb-3 font-medium">
+                    Google Sign-In requires a full window to work securely.
+                </p>
+                <button
+                    onClick={openInNewTab}
+                    className="w-full flex items-center justify-center px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-sm transition-all"
+                >
+                    <ShareIcon className="w-5 h-5 mr-2" />
+                    Open App in New Tab
+                </button>
+            </div>
+        ) : (
+          <>
+            <button
+            onClick={handleLogin}
+            disabled={isLoading}
+            className="w-full flex items-center justify-center px-4 py-3 bg-white hover:bg-slate-50 text-slate-700 font-medium border border-slate-300 rounded-lg shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+            {isLoading ? (
+                <span>Signing in...</span>
+            ) : (
+                <>
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5 mr-3" />
+                Sign in with Google
+                </>
+            )}
+            </button>
 
-        {/* Permanent Domain Display for Troubleshooting */}
+            <div className="my-4 flex items-center">
+                <div className="flex-grow border-t border-slate-200 dark:border-slate-600"></div>
+                <span className="flex-shrink mx-4 text-xs text-slate-400 dark:text-slate-500">OR</span>
+                <div className="flex-grow border-t border-slate-200 dark:border-slate-600"></div>
+            </div>
+
+            <button
+                onClick={onGuestLogin}
+                className="w-full flex items-center justify-center px-4 py-3 bg-slate-600 hover:bg-slate-700 text-white font-medium rounded-lg shadow-sm transition-all"
+            >
+                Continue as Guest
+            </button>
+          </>
+        )}
+        
+        <div className="mt-6 flex justify-between items-center text-xs text-slate-400 dark:text-slate-500">
+            <span>Securely powered by Google Firebase</span>
+            <button onClick={handleResetConfig} className="flex items-center hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+                <SettingsIcon className="w-3 h-3 mr-1" /> Reset Config
+            </button>
+        </div>
+
         <div className="mt-8 pt-4 border-t border-slate-100 dark:border-slate-700 text-left">
             <p className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-bold mb-2">Setup Info</p>
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Authorized Domain must include:</p>

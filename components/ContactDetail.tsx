@@ -1,9 +1,10 @@
-
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { Contact, DefaultFieldSetting, FileAttachment, JobTicket, jobStatusColors, JobTemplate, JobStatus, CatalogItem, paymentStatusColors, paymentStatusLabels, BusinessInfo } from '../types.ts';
+import { Contact, FileAttachment, JobTicket, jobStatusColors, paymentStatusColors, paymentStatusLabels } from '../types.ts';
+import { useData } from '../contexts/DataContext.tsx';
 import PhotoGalleryModal from './PhotoGalleryModal.tsx';
 import JobTicketModal from './JobTicketModal.tsx';
 import EmptyState from './EmptyState.tsx';
+import ConfirmationModal from './ConfirmationModal.tsx';
 import {
   PhoneIcon,
   MailIcon,
@@ -25,22 +26,12 @@ import { fileToDataUrl, formatFileSize, getInitials, generateId, calculateJobTic
 
 interface ContactDetailProps {
     contact: Contact;
-    defaultFields: DefaultFieldSetting[];
     onEdit: () => void;
-    onDelete: () => void;
     onClose: () => void;
-    addFilesToContact: (contactId: string, files: FileAttachment[]) => Promise<void>;
-    updateContactJobTickets: (contactId: string, jobTickets: JobTicket[]) => void;
     onViewInvoice: (contactId: string, ticketId: string) => void;
     onViewJobDetail: (contactId: string, ticketId: string) => void;
-    jobTemplates: JobTemplate[];
-    partsCatalog: CatalogItem[];
-    enabledStatuses: Record<JobStatus, boolean>;
     initialJobDate?: string;
     openJobId?: string;
-    businessInfo?: BusinessInfo;
-    showContactPhotos?: boolean;
-    apiKey?: string;
 }
 
 const VIEWABLE_MIME_TYPES = [
@@ -54,28 +45,56 @@ const VIEWABLE_MIME_TYPES = [
 
 type ActiveTab = 'details' | 'jobs' | 'files';
 
-const ContactDetail: React.FC<ContactDetailProps> = ({ contact, defaultFields, onEdit, onDelete, onClose, addFilesToContact, updateContactJobTickets, onViewInvoice, onViewJobDetail, jobTemplates, partsCatalog, enabledStatuses, initialJobDate, openJobId, businessInfo, showContactPhotos = true, apiKey }) => {
+const ContactDetail: React.FC<ContactDetailProps> = ({ 
+    contact, 
+    onEdit, 
+    onClose, 
+    onViewInvoice, 
+    onViewJobDetail, 
+    initialJobDate, 
+    openJobId,
+}) => {
+    const {
+        defaultFields,
+        handleAddFilesToContact,
+        handleUpdateContactJobTickets,
+        handleDeleteContact,
+        jobTemplates,
+        partsCatalog,
+        enabledStatuses,
+        businessInfo,
+        showContactPhotos,
+        mapSettings,
+    } = useData();
+    
     const [isGalleryOpen, setIsGalleryOpen] = useState(false);
     const [galleryCurrentIndex, setGalleryCurrentIndex] = useState(0);
     const [showPhotoOptions, setShowPhotoOptions] = useState(false);
     const [isJobTicketModalOpen, setIsJobTicketModalOpen] = useState(false);
     const [editingJobTicket, setEditingJobTicket] = useState<JobTicket | null>(null);
-    // const [hydratedFiles, setHydratedFiles] = useState<FileAttachment[]>([]); // No longer needed for cloud sync
     const [isLoadingFiles, setIsLoadingFiles] = useState(false);
     const [activeTab, setActiveTab] = useState<ActiveTab>('details');
+    const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
+
+    const processedParamsRef = useRef<{ date?: string; id?: string }>({});
 
     const imageUploadRef = useRef<HTMLInputElement>(null);
     const cameraInputRef = useRef<HTMLInputElement>(null);
     const fileUploadRef = useRef<HTMLInputElement>(null);
 
-    // Handle initialJobDate prop to open modal automatically for NEW job
-    // OR openJobId to open modal automatically for EXISTING job
     useEffect(() => {
-        if (initialJobDate) {
+        processedParamsRef.current = {};
+    }, [contact.id]);
+
+    useEffect(() => {
+        if (initialJobDate && processedParamsRef.current.date !== initialJobDate) {
+            processedParamsRef.current.date = initialJobDate;
+            const actualDate = initialJobDate.split('_')[0];
+
             setActiveTab('jobs');
             setEditingJobTicket({
                 id: generateId(),
-                date: initialJobDate,
+                date: actualDate,
                 status: 'Estimate Scheduled',
                 notes: '',
                 parts: [],
@@ -86,49 +105,50 @@ const ContactDetail: React.FC<ContactDetailProps> = ({ contact, defaultFields, o
                 jobLocation: contact.address || '',
             });
             setIsJobTicketModalOpen(true);
-        } else if (openJobId) {
+        } 
+        
+        if (openJobId && processedParamsRef.current.id !== openJobId) {
              const ticketToEdit = contact.jobTickets?.find(t => t.id === openJobId);
              if (ticketToEdit) {
+                 processedParamsRef.current.id = openJobId;
                  setActiveTab('jobs');
                  setEditingJobTicket(ticketToEdit);
                  setIsJobTicketModalOpen(true);
              }
         }
-    }, [initialJobDate, openJobId, businessInfo]); 
+    }, [initialJobDate, openJobId, businessInfo, contact.jobTickets, contact.address]); 
 
     const handleViewFile = async (file: FileAttachment) => {
         if (!file.dataUrl) return;
-        // For Cloud Sync, dataUrl IS the download URL
         window.open(file.dataUrl, '_blank');
     };
     
-    // No hydration effect needed anymore, contact.files contains full URLs from Firestore
-
     const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
             setIsLoadingFiles(true);
             try {
+                const newFileObjects: { [id: string]: File } = {};
                 const newFilesPromises = Array.from(e.target.files).map(async (file: File) => {
-                    // We still need to convert to Base64 momentarily for the App.tsx handler to upload it
-                    // Alternatively, we could pass File objects, but existing utility expects dataUrl prop structure
                     const dataUrl = await fileToDataUrl(file); 
-                    return {
+                    const newFile: FileAttachment = {
                         id: generateId(),
                         name: file.name,
                         type: file.type,
                         size: file.size,
                         dataUrl: dataUrl,
                     };
+                    newFileObjects[newFile.id] = file;
+                    return newFile;
                 });
                 const newFiles = await Promise.all(newFilesPromises);
-                await addFilesToContact(contact.id, newFiles);
+                await handleAddFilesToContact(contact.id, newFiles, newFileObjects);
             } catch(error) {
                 console.error("Error reading files:", error);
                 alert("There was an error processing your files.");
             } finally {
                 setIsLoadingFiles(false);
             }
-            if(e.target) e.target.value = ''; // Reset input
+            if(e.target) e.target.value = '';
         }
         setShowPhotoOptions(false);
     };
@@ -154,7 +174,6 @@ const ContactDetail: React.FC<ContactDetailProps> = ({ contact, defaultFields, o
         if (contact.photoUrl) {
             images.push({ url: contact.photoUrl, name: `${contact.name} (Profile)` });
         }
-        // Use contact.files directly
         (contact.files || []).forEach(file => {
             if (file.type.startsWith('image/') && file.dataUrl) {
                 images.push({ url: file.dataUrl, name: file.name });
@@ -172,28 +191,7 @@ const ContactDetail: React.FC<ContactDetailProps> = ({ contact, defaultFields, o
     };
 
     const handleSaveJobTicket = (entry: Omit<JobTicket, 'id'> & { id?: string }) => {
-        let updatedTickets;
-        const currentTickets = contact.jobTickets || [];
-        if (entry.id && currentTickets.some(t => t.id === entry.id)) {
-            updatedTickets = currentTickets.map(ticket => ticket.id === entry.id ? { ...ticket, ...entry } : ticket);
-        } else {
-            const newTicket: JobTicket = { 
-                id: entry.id || generateId(), 
-                date: entry.date,
-                time: entry.time,
-                notes: entry.notes,
-                status: entry.status,
-                parts: entry.parts,
-                laborCost: entry.laborCost || 0,
-                salesTaxRate: entry.salesTaxRate,
-                processingFeeRate: entry.processingFeeRate,
-                deposit: entry.deposit || 0,
-                createdAt: new Date().toISOString(),
-                jobLocation: entry.jobLocation,
-            };
-            updatedTickets = [newTicket, ...currentTickets];
-        }
-        updateContactJobTickets(contact.id, updatedTickets);
+        handleUpdateContactJobTickets(contact.id, entry);
         setIsJobTicketModalOpen(false);
         setEditingJobTicket(null);
     };
@@ -201,8 +199,16 @@ const ContactDetail: React.FC<ContactDetailProps> = ({ contact, defaultFields, o
     const handleDeleteJobTicket = (id: string) => {
         if (window.confirm('Are you sure you want to delete this job ticket?')) {
             const updatedTickets = (contact.jobTickets || []).filter(ticket => ticket.id !== id);
-            updateContactJobTickets(contact.id, updatedTickets);
+            handleUpdateContactJobTickets(contact.id, updatedTickets);
         }
+    };
+
+    const performDelete = async () => {
+        const success = await handleDeleteContact(contact.id);
+        if (success) {
+            onClose(); // Navigate away only on successful deletion
+        }
+        // No need to close modal here, onConfirm will handle it
     };
     
     const sortedJobTickets = useMemo(() => {
@@ -632,7 +638,7 @@ const ContactDetail: React.FC<ContactDetailProps> = ({ contact, defaultFields, o
                             <EditIcon className="w-4 h-4" />
                             <span>Edit</span>
                         </button>
-                        <button onClick={onDelete} className="flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium text-red-600 bg-red-100 dark:bg-red-900/50 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900 transition-colors">
+                        <button onClick={() => setIsConfirmationModalOpen(true)} className="flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium text-red-600 bg-red-100 dark:bg-red-900/50 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900 transition-colors">
                             <TrashIcon className="w-4 h-4" />
                             <span>Delete</span>
                         </button>
@@ -674,7 +680,16 @@ const ContactDetail: React.FC<ContactDetailProps> = ({ contact, defaultFields, o
                     defaultSalesTaxRate={businessInfo?.defaultSalesTaxRate}
                     defaultProcessingFeeRate={businessInfo?.defaultProcessingFeeRate}
                     contactAddress={contact.address}
-                    apiKey={apiKey}
+                    apiKey={mapSettings.apiKey}
+                />
+            )}
+            {isConfirmationModalOpen && (
+                <ConfirmationModal
+                    isOpen={isConfirmationModalOpen}
+                    onClose={() => setIsConfirmationModalOpen(false)}
+                    onConfirm={performDelete}
+                    title="Delete Contact"
+                    message="Are you sure you want to delete this contact and all associated data? This action cannot be undone."
                 />
             )}
         </>

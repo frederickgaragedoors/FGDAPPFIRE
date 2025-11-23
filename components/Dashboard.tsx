@@ -1,12 +1,11 @@
-
 import React, { useMemo } from 'react';
-import { Contact, JobTicket, jobStatusColors, JobStatus, paymentStatusColors, paymentStatusLabels } from '../types.ts';
+import { JobTicket, jobStatusColors, JobStatus, paymentStatusColors, paymentStatusLabels } from '../types.ts';
+import { useData } from '../contexts/DataContext.tsx';
 import EmptyState from './EmptyState.tsx';
 import { ClipboardListIcon } from './icons.tsx';
 import { formatTime } from '../utils.ts';
 
 interface DashboardProps {
-    contacts: Contact[];
     onViewJobDetail: (contactId: string, ticketId: string) => void;
 }
 
@@ -15,7 +14,8 @@ type JobWithContact = JobTicket & {
     contactName: string;
 };
 
-const Dashboard: React.FC<DashboardProps> = ({ contacts, onViewJobDetail }) => {
+const Dashboard: React.FC<DashboardProps> = ({ onViewJobDetail }) => {
+    const { contacts } = useData();
     
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -29,7 +29,7 @@ const Dashboard: React.FC<DashboardProps> = ({ contacts, onViewJobDetail }) => {
     threeDaysAgo.setHours(0, 0, 0, 0);
 
     const allJobs = useMemo<JobWithContact[]>(() => {
-        return contacts.flatMap(contact => 
+        return (contacts || []).flatMap(contact => 
             (contact.jobTickets || []).map(ticket => ({
                 ...ticket,
                 contactId: contact.id,

@@ -38,7 +38,7 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
   const [deposit, setDeposit] = useState<number | ''>(0);
 
   const locationInputRef = useRef<HTMLInputElement>(null);
-  const { isLoaded: isMapsLoaded } = useGoogleMaps(apiKey);
+  const { isLoaded: isMapsLoaded, error: mapsError } = useGoogleMaps(apiKey);
 
   useEffect(() => {
     if (entry) {
@@ -277,6 +277,11 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
                         >
                             Reset to Billing Address
                         </button>
+                    )}
+                    {mapsError && (
+                        <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+                            Address autocomplete unavailable: {mapsError.message}
+                        </p>
                     )}
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -1,34 +1,45 @@
-
-import React, { useState } from 'react';
-import { Contact } from '../types.ts';
+import React, { useState, useEffect } from 'react';
+import { useData } from '../contexts/DataContext.tsx';
 import ContactListItem from './ContactListItem.tsx';
 import { SearchIcon } from './icons.tsx';
 
 interface ContactListProps {
-  contacts: Contact[];
   selectedContactId: string | null;
   onSelectContact: (id: string) => void;
   onAddJob: (contactId: string) => void;
 }
 
 const ContactList: React.FC<ContactListProps> = ({ 
-    contacts, 
     selectedContactId, 
     onSelectContact,
     onAddJob
 }) => {
+  const { contacts } = useData();
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState(searchQuery);
 
-  const filteredContacts = contacts.filter(contact => {
-    const query = searchQuery.toLowerCase();
-    const hasMatchingJobTicket = contact.jobTickets.some(ticket =>
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, 300); // 300ms delay
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [searchQuery]);
+
+  const filteredContacts = (contacts || []).filter(contact => {
+    const query = debouncedQuery.toLowerCase();
+    if (!query) return true;
+    
+    const hasMatchingJobTicket = (contact.jobTickets || []).some(ticket =>
       ticket.id.toLowerCase().includes(query)
     );
 
     return (
       contact.name.toLowerCase().includes(query) ||
-      contact.email.toLowerCase().includes(query) ||
-      contact.phone.toLowerCase().includes(query) ||
+      (contact.email && contact.email.toLowerCase().includes(query)) ||
+      (contact.phone && contact.phone.toLowerCase().includes(query)) ||
       (contact.address && contact.address.toLowerCase().includes(query)) ||
       hasMatchingJobTicket
     );

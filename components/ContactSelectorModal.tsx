@@ -1,26 +1,25 @@
-
 import React, { useState } from 'react';
-import { Contact } from '../types.ts';
-import { SearchIcon, PlusIcon, XIcon, UserCircleIcon } from './icons.tsx';
+import { useData } from '../contexts/DataContext.tsx';
+import { SearchIcon, PlusIcon, XIcon } from './icons.tsx';
 import { getInitials } from '../utils.ts';
 
 interface ContactSelectorModalProps {
-  contacts: Contact[];
   onSelect: (contactId: string) => void;
   onNewContact: () => void;
   onClose: () => void;
   selectedDate: Date;
 }
 
-const ContactSelectorModal: React.FC<ContactSelectorModalProps> = ({ contacts, onSelect, onNewContact, onClose, selectedDate }) => {
+const ContactSelectorModal: React.FC<ContactSelectorModalProps> = ({ onSelect, onNewContact, onClose, selectedDate }) => {
+  const { contacts } = useData();
   const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredContacts = contacts.filter(contact => {
+  const filteredContacts = (contacts || []).filter(contact => {
     const query = searchQuery.toLowerCase();
     return (
       contact.name.toLowerCase().includes(query) ||
-      contact.email.toLowerCase().includes(query) ||
-      contact.phone.toLowerCase().includes(query)
+      (contact.email && contact.email.toLowerCase().includes(query)) ||
+      (contact.phone && contact.phone.toLowerCase().includes(query))
     );
   });
 

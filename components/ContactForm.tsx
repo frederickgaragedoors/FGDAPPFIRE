@@ -1,6 +1,7 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Contact, FileAttachment, CustomField, DefaultFieldSetting, JobTicket, DoorProfile } from '../types.ts';
+import { useData } from '../contexts/DataContext.tsx';
 import { UserCircleIcon, ArrowLeftIcon, FileIcon, TrashIcon, PlusIcon } from './icons.tsx';
 import { fileToDataUrl, formatFileSize, generateId } from '../utils.ts';
 import { useGoogleMaps } from '../hooks/useGoogleMaps.ts';
@@ -10,14 +11,14 @@ declare const google: any;
 
 interface ContactFormProps {
   initialContact?: Contact;
-  onSave: (contactData: Omit<Contact, 'id'>) => void;
   onCancel: () => void;
-  defaultFields?: DefaultFieldSetting[];
   initialJobDate?: string;
-  apiKey?: string;
 }
 
-const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onSave, onCancel, defaultFields, initialJobDate, apiKey }) => {
+const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onCancel, initialJobDate }) => {
+  const { handleSaveContact, defaultFields, mapSettings } = useData();
+  const apiKey = mapSettings?.apiKey;
+
   const [name, setName] = useState(initialContact?.name || '');
   const [email, setEmail] = useState(initialContact?.email || '');
   const [phone, setPhone] = useState(initialContact?.phone || '');
@@ -29,7 +30,7 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onSave, onCan
   );
   
   const addressInputRef = useRef<HTMLInputElement>(null);
-  const { isLoaded: isMapsLoaded } = useGoogleMaps(apiKey);
+  const { isLoaded: isMapsLoaded, error: mapsError } = useGoogleMaps(apiKey);
 
   const [doorProfiles, setDoorProfiles] = useState<DoorProfile[]>(() => {
       if (initialContact?.doorProfiles) {
@@ -68,6 +69,7 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onSave, onCan
   });
 
   const [stagedFiles, setStagedFiles] = useState<FileAttachment[]>([]);
+  const newFileObjects = useRef<{ [id: string]: File }>({});
 
   // Initialize Google Maps Autocomplete
   useEffect(() => {
@@ -93,6 +95,7 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onSave, onCan
       try {
         const dataUrl = await fileToDataUrl(file);
         setPhotoUrl(dataUrl);
+        newFileObjects.current['profile_photo'] = file; // Use a special key for the profile photo
       } catch (error) {
         console.error("Error reading photo:", error);
         alert("There was an error processing the photo. It might be too large or corrupted.");
@@ -107,13 +110,15 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onSave, onCan
       try {
         const newFilesPromises = Array.from(input.files).map(async (file: File) => {
           const dataUrl = await fileToDataUrl(file);
-          return {
+          const newFile: FileAttachment = {
             id: generateId(),
             name: file.name,
             type: file.type,
             size: file.size,
             dataUrl: dataUrl,
           };
+          newFileObjects.current[newFile.id] = file;
+          return newFile;
         });
         const newFiles = await Promise.all(newFilesPromises);
         setStagedFiles(prevFiles => [...prevFiles, ...newFiles]);
@@ -128,6 +133,7 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onSave, onCan
   const removeFile = (id: string, isStaged: boolean) => {
     if (isStaged) {
         setStagedFiles(stagedFiles.filter(file => file.id !== id));
+        delete newFileObjects.current[id];
     } else {
         setFiles(files.filter(file => file.id !== id));
     }
@@ -150,18 +156,16 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onSave, onCan
   };
 
   const handleSpringCountChange = (profileId: string, count: number) => {
-      const newCount = Math.max(1, Math.min(4, count)); // Limit between 1 and 4 for UI sanity
+      const newCount = Math.max(1, Math.min(4, count));
       setDoorProfiles(prev => prev.map(p => {
           if (p.id !== profileId) return p;
           
           const currentSprings = p.springs || [];
           if (newCount > currentSprings.length) {
-              // Add springs
               const toAdd = newCount - currentSprings.length;
               const newSprings = Array.from({ length: toAdd }, () => ({ id: generateId(), size: '' }));
               return { ...p, springs: [...currentSprings, ...newSprings] };
           } else if (newCount < currentSprings.length) {
-              // Remove springs from the end
               return { ...p, springs: currentSprings.slice(0, newCount) };
           }
           return p;
@@ -205,9 +209,10 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onSave, onCan
     let initialJobTickets: JobTicket[] = initialContact?.jobTickets || [];
     
     if (initialJobDate && !initialContact) {
+        const actualDate = initialJobDate.split('_')[0];
         initialJobTickets = [{
             id: generateId(),
-            date: initialJobDate,
+            date: actualDate,
             status: 'Estimate Scheduled',
             notes: '',
             parts: [],
@@ -216,7 +221,6 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onSave, onCan
         }];
     }
 
-    // Sync legacy springSize field with first spring for backward compatibility
     const processedProfiles = doorProfiles.map(p => ({
         ...p,
         springSize: p.springs && p.springs.length > 0 ? p.springs[0].size : ''
@@ -226,7 +230,7 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onSave, onCan
         p.dimensions || p.doorType || p.springSystem || p.openerBrand || p.openerModel
     );
 
-    onSave({ 
+    const contactData = { 
         name, 
         email, 
         phone, 
@@ -236,7 +240,11 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onSave, onCan
         customFields, 
         jobTickets: initialJobTickets,
         doorProfiles: finalDoorProfiles
-    });
+    };
+
+    const contactId = initialContact ? initialContact.id : undefined;
+    handleSaveContact({id: contactId, ...contactData}, newFileObjects.current);
+    newFileObjects.current = {};
   };
 
   const inputClass = "mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm dark:text-white";
@@ -276,6 +284,8 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onSave, onCan
           </div>
       );
   };
+  
+  const displayDate = initialJobDate ? new Date(initialJobDate.split('_')[0]).toLocaleDateString() : '';
 
   return (
     <form onSubmit={handleSubmit} className="h-full flex flex-col bg-white dark:bg-slate-800 overflow-y-auto">
@@ -295,7 +305,7 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onSave, onCan
       {initialJobDate && !initialContact && (
         <div className="px-4 sm:px-6 pt-6">
             <div className="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-md p-3 text-sm text-sky-800 dark:text-sky-200">
-                This new contact will be automatically scheduled for a job on <strong>{new Date(initialJobDate).toLocaleDateString()}</strong>.
+                This new contact will be automatically scheduled for a job on <strong>{displayDate}</strong>.
             </div>
         </div>
       )}
@@ -353,6 +363,11 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onSave, onCan
                                 className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm dark:text-white"
                                 autoComplete="off"
                             />
+                            {mapsError && (
+                                <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+                                    Address autocomplete unavailable: {mapsError.message}
+                                </p>
+                            )}
                         </div>
                     </div>
 

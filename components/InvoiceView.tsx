@@ -1,23 +1,34 @@
-
 import React, { useState, useRef } from 'react';
-import { Contact, JobTicket, BusinessInfo, FileAttachment, EmailSettings } from '../types.ts';
+import { Contact, JobTicket, FileAttachment, ViewState } from '../types.ts';
+import { useData } from '../contexts/DataContext.tsx';
 import { ArrowLeftIcon, MailIcon, ShareIcon } from './icons.tsx';
 import { generateId, fileToDataUrl, calculateJobTicketTotal, processTemplate, formatPhoneNumber } from '../utils.ts';
 import { generatePdf } from '../services/pdfGenerator.ts';
 
 interface InvoiceViewProps {
-    contact: Contact;
-    ticket: JobTicket;
-    businessInfo: BusinessInfo;
-    emailSettings: EmailSettings;
+    contactId: string;
+    ticketId: string;
+    from?: 'contact_detail' | 'job_detail';
     onClose: () => void;
-    addFilesToContact: (contactId: string, files: FileAttachment[]) => void;
 }
 
-const InvoiceView: React.FC<InvoiceViewProps> = ({ contact, ticket, businessInfo, emailSettings, onClose, addFilesToContact }) => {
+const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, onClose }) => {
+    const { contacts, businessInfo, emailSettings, handleAddFilesToContact } = useData();
+    const contact = contacts.find(c => c.id === contactId);
+    const ticket = contact?.jobTickets.find(t => t.id === ticketId);
+
     const [docType, setDocType] = useState<'receipt' | 'estimate'>('receipt');
     const [isSaving, setIsSaving] = useState(false);
     const invoiceContentRef = useRef<HTMLDivElement>(null);
+
+    if (!contact || !ticket) {
+        return (
+            <div className="p-4">
+                <p>Could not find the requested job ticket.</p>
+                <button onClick={onClose}>Go Back</button>
+            </div>
+        );
+    }
 
     // --- Calculations ---
     const { subtotal, taxAmount, feeAmount, totalCost, deposit, balanceDue } = calculateJobTicketTotal(ticket);
@@ -72,14 +83,15 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contact, ticket, businessInfo
             
             try {
                  const dataUrl = await fileToDataUrl(pdfFile);
-                 const newFileAttachment = {
+                 const newFileAttachment: FileAttachment = {
                     id: generateId(),
                     name: fileName,
                     type: 'application/pdf',
                     size: pdfFile.size,
                     dataUrl: dataUrl
                 };
-                await addFilesToContact(contact.id, [newFileAttachment]);
+                const newFileObjects: { [id: string]: File } = { [newFileAttachment.id]: pdfFile };
+                await handleAddFilesToContact(contact.id, [newFileAttachment], newFileObjects);
                 alert('PDF attached successfully!');
             } catch (error) {
                 console.error("Error attaching PDF:", error);
@@ -90,7 +102,7 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contact, ticket, businessInfo
     };
     
     const handleEmail = async () => {
-        if (isSaving) return;
+        if (isSaving || !emailSettings) return;
         setIsSaving(true);
 
         const template = docType === 'estimate' ? emailSettings.estimate : emailSettings.receipt;
@@ -120,7 +132,7 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contact, ticket, businessInfo
     };
 
     const handleNativeShare = async () => {
-        if (isSaving) return;
+        if (isSaving || !emailSettings) return;
         setIsSaving(true);
 
         const template = docType === 'estimate' ? emailSettings.estimate : emailSettings.receipt;
@@ -151,7 +163,7 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contact, ticket, businessInfo
              } else {
                  alert("Sharing files is not supported on this device. Please use the Email or Download option.");
              }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Share failed:", error);
              if (error.name !== 'AbortError') {
                 alert("Share failed. Please try downloading or using the Email button.");
@@ -521,8 +533,8 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contact, ticket, businessInfo
                             
                             <div className="text-sm">
                                 {(() => {
-                                    const failedOrRepaired = ticket.inspection.filter(i => i.status === 'Fail' || i.status === 'Repaired');
-                                    const passedCount = ticket.inspection.filter(i => i.status === 'Pass').length;
+                                    const failedOrRepaired = (ticket.inspection || []).filter(i => i.status === 'Fail' || i.status === 'Repaired');
+                                    const passedCount = (ticket.inspection || []).filter(i => i.status === 'Pass').length;
                                     
                                     return (
                                         <>

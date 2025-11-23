@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Contact, JobTicket, BusinessInfo, JobTemplate, jobStatusColors, JobStatus, CatalogItem, paymentStatusColors, paymentStatusLabels, DEFAULT_ON_MY_WAY_TEMPLATE, InspectionItem } from '../types.ts';
+import { Contact, JobTicket, jobStatusColors, paymentStatusColors, paymentStatusLabels, DEFAULT_ON_MY_WAY_TEMPLATE } from '../types.ts';
+import { useData } from '../contexts/DataContext.tsx';
 import JobTicketModal from './JobTicketModal.tsx';
 import InspectionModal from './InspectionModal.tsx';
 import {
@@ -18,34 +19,42 @@ import {
 import { calculateJobTicketTotal, formatTime, processTemplate, formatPhoneNumber } from '../utils.ts';
 
 interface JobDetailViewProps {
-  contact: Contact;
-  ticket: JobTicket;
-  businessInfo: BusinessInfo;
-  jobTemplates: JobTemplate[];
-  partsCatalog: CatalogItem[];
+  contactId: string;
+  ticketId: string;
   onBack: () => void;
-  onEditTicket: (ticketData: Omit<JobTicket, 'id'> & { id?: string }) => void;
-  onDeleteTicket: () => void;
   onViewInvoice: () => void;
-  enabledStatuses: Record<JobStatus, boolean>;
-  apiKey?: string;
 }
 
 const JobDetailView: React.FC<JobDetailViewProps> = ({
-  contact,
-  ticket,
-  businessInfo,
-  jobTemplates,
-  partsCatalog,
+  contactId,
+  ticketId,
   onBack,
-  onEditTicket,
-  onDeleteTicket,
   onViewInvoice,
-  enabledStatuses,
-  apiKey,
 }) => {
+  const { 
+    contacts,
+    businessInfo, 
+    jobTemplates, 
+    partsCatalog, 
+    enabledStatuses, 
+    mapSettings,
+    handleUpdateContactJobTickets 
+  } = useData();
+  
+  const contact = contacts.find(c => c.id === contactId);
+  const ticket = contact?.jobTickets.find(t => t.id === ticketId);
+
   const [isJobTicketModalOpen, setIsJobTicketModalOpen] = useState(false);
   const [isInspectionModalOpen, setIsInspectionModalOpen] = useState(false);
+
+  if (!contact || !ticket) {
+        return (
+            <div className="p-4">
+                <p>Could not find the requested job ticket.</p>
+                <button onClick={onBack}>Go Back</button>
+            </div>
+        );
+  }
 
   const { subtotal, taxAmount, feeAmount, totalCost, deposit } = calculateJobTicketTotal(ticket);
   const statusColor = jobStatusColors[ticket.status];
@@ -64,15 +73,10 @@ const JobDetailView: React.FC<JobDetailViewProps> = ({
   }
   const displayBalance = totalCost - paidAmount;
 
-  // Determine target location for map/service
   const serviceLocation = ticket.jobLocation || contact.address;
-  const isDifferentLocation = ticket.jobLocation && ticket.jobLocation !== contact.address;
-
-  // Prioritize Site Contact for communication actions
   const primaryPhone = ticket.jobLocationContactPhone || contact.phone;
   const primaryName = ticket.jobLocationContactName || contact.name;
 
-  // SMS Link for "On My Way"
   const template = businessInfo.onMyWayTemplate || DEFAULT_ON_MY_WAY_TEMPLATE;
   const smsBody = processTemplate(template, {
     customerName: primaryName.split(' ')[0],
@@ -80,12 +84,19 @@ const JobDetailView: React.FC<JobDetailViewProps> = ({
   });
   const smsLink = `sms:${primaryPhone}?body=${encodeURIComponent(smsBody)}`;
   
-  // Inspection Summary
   const inspectionItems = ticket.inspection || [];
   const totalInspectionItems = inspectionItems.length;
   const failedItems = inspectionItems.filter(i => i.status === 'Fail').length;
   const repairedItems = inspectionItems.filter(i => i.status === 'Repaired').length;
   const passedItems = inspectionItems.filter(i => i.status === 'Pass').length;
+  
+  const handleDeleteTicket = () => {
+     if (window.confirm('Are you sure you want to delete this job ticket?')) {
+        const updatedTickets = contact.jobTickets.filter(t => t.id !== ticket.id);
+        handleUpdateContactJobTickets(contact.id, updatedTickets);
+        onBack();
+     }
+  };
 
   return (
     <>
@@ -116,7 +127,7 @@ const JobDetailView: React.FC<JobDetailViewProps> = ({
                 <EditIcon className="w-5 h-5" />
             </button>
              <button 
-                onClick={onDeleteTicket} 
+                onClick={handleDeleteTicket} 
                 className="flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium text-red-600 bg-red-100 dark:bg-red-900/50 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900 transition-colors"
                 title="Delete Job"
             >
@@ -347,7 +358,7 @@ const JobDetailView: React.FC<JobDetailViewProps> = ({
         <JobTicketModal
           entry={ticket}
           onSave={(updatedTicket) => {
-            onEditTicket(updatedTicket);
+            handleUpdateContactJobTickets(contact.id, updatedTicket);
             setIsJobTicketModalOpen(false);
           }}
           onClose={() => setIsJobTicketModalOpen(false)}
@@ -355,7 +366,7 @@ const JobDetailView: React.FC<JobDetailViewProps> = ({
           partsCatalog={partsCatalog}
           enabledStatuses={enabledStatuses}
           contactAddress={contact.address}
-          apiKey={apiKey}
+          apiKey={mapSettings?.apiKey}
         />
       )}
 
@@ -363,7 +374,7 @@ const JobDetailView: React.FC<JobDetailViewProps> = ({
         <InspectionModal
           existingInspection={ticket.inspection}
           onSave={(inspection) => {
-            onEditTicket({ ...ticket, inspection });
+            handleUpdateContactJobTickets(contact.id, { ...ticket, inspection });
             setIsInspectionModalOpen(false);
           }}
           onClose={() => setIsInspectionModalOpen(false)}
