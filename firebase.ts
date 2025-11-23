@@ -1,8 +1,13 @@
+import { initializeApp, type FirebaseApp } from 'firebase/app';
+import { getAuth, GoogleAuthProvider, type Auth, type User } from 'firebase/auth';
+import { getFirestore, enableIndexedDbPersistence, type Firestore, type QuerySnapshot, type DocumentData, type DocumentSnapshot } from 'firebase/firestore';
+import { getStorage, type FirebaseStorage } from 'firebase/storage';
 
-import { initializeApp, FirebaseApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, Auth } from 'firebase/auth';
-import { getFirestore, enableIndexedDbPersistence, Firestore } from 'firebase/firestore';
-import { getStorage, FirebaseStorage } from 'firebase/storage';
+// Export types for use in other files, aliased to match previous usage
+export type FirebaseUser = User;
+export type FirebaseQuerySnapshot<T = DocumentData> = QuerySnapshot<T>;
+export type FirebaseDocumentData = DocumentData;
+export type FirebaseDocumentSnapshot<T = DocumentData> = DocumentSnapshot<T>;
 
 // Helper to get env vars from Vite or LocalStorage (for preview support)
 const getEnvVar = (key: string): string => {
@@ -33,10 +38,10 @@ const firebaseConfig = {
 
 // Export these as let variables so they can be conditionally assigned
 let app: FirebaseApp | undefined;
-let auth: Auth | undefined;
+let authInstance: Auth | undefined;
 let googleProvider: GoogleAuthProvider | undefined;
 let db: Firestore | undefined;
-let storage: FirebaseStorage | undefined;
+let storageInstance: FirebaseStorage | undefined;
 
 // Check if config is valid (basic check for apiKey)
 export const isFirebaseConfigured = !!(firebaseConfig.apiKey && firebaseConfig.apiKey.length > 0);
@@ -44,10 +49,10 @@ export const isFirebaseConfigured = !!(firebaseConfig.apiKey && firebaseConfig.a
 if (isFirebaseConfigured) {
   try {
     app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
+    authInstance = getAuth(app);
     googleProvider = new GoogleAuthProvider();
     db = getFirestore(app);
-    storage = getStorage(app);
+    storageInstance = getStorage(app);
 
     // Enable offline persistence
     enableIndexedDbPersistence(db).catch((err) => {
@@ -59,12 +64,10 @@ if (isFirebaseConfigured) {
     });
   } catch (error) {
     console.error("Firebase Initialization Error:", error);
-    // Reset flag if initialization actually crashed (e.g. invalid format key)
   }
 } else {
   console.warn("Firebase API keys are missing. App entering setup mode.");
 }
 
-// Cast exports to expected types to satisfy TypeScript imports in other files.
 // Components should check `isFirebaseConfigured` before using these.
-export { auth, googleProvider, db, storage };
+export { authInstance as auth, googleProvider, db, storageInstance as storage };

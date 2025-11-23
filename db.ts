@@ -1,8 +1,9 @@
-import { FileAttachment } from './types.ts';
+import { Contact } from './types.ts';
 
 const DB_NAME = 'BusinessContactsDB';
-const DB_VERSION = 1;
-const FILE_STORE_NAME = 'files';
+const DB_VERSION = 2; // Bump version for new stores
+const CONTACTS_STORE = 'contacts';
+const SETTINGS_STORE = 'settings';
 
 let dbInstance: IDBDatabase | null = null;
 
@@ -26,8 +27,12 @@ const getDB = (): Promise<IDBDatabase> => {
 
         request.onupgradeneeded = (event) => {
             const db = (event.target as IDBOpenDBRequest).result;
-            if (!db.objectStoreNames.contains(FILE_STORE_NAME)) {
-                db.createObjectStore(FILE_STORE_NAME, { keyPath: 'id' });
+            if (!db.objectStoreNames.contains(CONTACTS_STORE)) {
+                db.createObjectStore(CONTACTS_STORE, { keyPath: 'id' });
+            }
+            if (!db.objectStoreNames.contains(SETTINGS_STORE)) {
+                // Use a known key for the single settings object
+                db.createObjectStore(SETTINGS_STORE, { keyPath: 'id' });
             }
         };
     });
@@ -35,62 +40,11 @@ const getDB = (): Promise<IDBDatabase> => {
 
 export const initDB = getDB;
 
-export const addFiles = async (files: FileAttachment[]): Promise<void> => {
+// --- Contacts ---
+export const getContacts = async (): Promise<Contact[]> => {
     const db = await getDB();
-    const transaction = db.transaction(FILE_STORE_NAME, 'readwrite');
-    const store = transaction.objectStore(FILE_STORE_NAME);
-    
-    const promises = files.map(file => {
-        return new Promise<void>((resolve, reject) => {
-            const request = store.put(file);
-            request.onsuccess = () => resolve();
-            request.onerror = () => reject(request.error);
-        });
-    });
-
-    await Promise.all(promises);
-};
-
-export const getFiles = async (ids: string[]): Promise<FileAttachment[]> => {
-    if (ids.length === 0) return [];
-    const db = await getDB();
-    const transaction = db.transaction(FILE_STORE_NAME, 'readonly');
-    const store = transaction.objectStore(FILE_STORE_NAME);
-    
-    const promises = ids.map(id => {
-        return new Promise<FileAttachment | undefined>((resolve, reject) => {
-            const request = store.get(id);
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
-    });
-
-    const results = await Promise.all(promises);
-    return results.filter((file): file is FileAttachment => !!file);
-};
-
-export const deleteFiles = async (ids: string[]): Promise<void> => {
-    if (ids.length === 0) return;
-    const db = await getDB();
-    const transaction = db.transaction(FILE_STORE_NAME, 'readwrite');
-    const store = transaction.objectStore(FILE_STORE_NAME);
-    
-    const promises = ids.map(id => {
-        return new Promise<void>((resolve, reject) => {
-            const request = store.delete(id);
-            request.onsuccess = () => resolve();
-            request.onerror = () => reject(request.error);
-        });
-    });
-
-    await Promise.all(promises);
-};
-
-export const getAllFiles = async (): Promise<FileAttachment[]> => {
-    const db = await getDB();
-    const transaction = db.transaction(FILE_STORE_NAME, 'readonly');
-    const store = transaction.objectStore(FILE_STORE_NAME);
-    
+    const transaction = db.transaction(CONTACTS_STORE, 'readonly');
+    const store = transaction.objectStore(CONTACTS_STORE);
     return new Promise((resolve, reject) => {
         const request = store.getAll();
         request.onsuccess = () => resolve(request.result);
@@ -98,30 +52,47 @@ export const getAllFiles = async (): Promise<FileAttachment[]> => {
     });
 };
 
-export const clearAndAddFiles = async (files: FileAttachment[]): Promise<void> => {
+export const saveContacts = async (contacts: Contact[]): Promise<void> => {
     const db = await getDB();
-    const transaction = db.transaction(FILE_STORE_NAME, 'readwrite');
-    const store = transaction.objectStore(FILE_STORE_NAME);
-
-    return new Promise<void>((resolve, reject) => {
-        const clearRequest = store.clear();
+    const transaction = db.transaction(CONTACTS_STORE, 'readwrite');
+    const store = transaction.objectStore(CONTACTS_STORE);
+    // Clear first, then add all
+    const clearRequest = store.clear();
+    return new Promise((resolve, reject) => {
         clearRequest.onerror = () => reject(clearRequest.error);
         clearRequest.onsuccess = () => {
-            if (files && files.length > 0) {
-                const addPromises = files.map(file => {
-                    return new Promise<void>((resolveFile, rejectFile) => {
-                        const addRequest = store.put(file);
-                        addRequest.onsuccess = () => resolveFile();
-                        addRequest.onerror = () => rejectFile(addRequest.error);
-                    });
+            const addPromises = contacts.map(contact => {
+                return new Promise<void>((res, rej) => {
+                    const req = store.put(contact);
+                    req.onsuccess = () => res();
+                    req.onerror = () => rej(req.error);
                 });
-
-                Promise.all(addPromises)
-                    .then(() => resolve())
-                    .catch(error => reject(error));
-            } else {
-                resolve();
-            }
+            });
+            Promise.all(addPromises).then(() => resolve()).catch(reject);
         };
+    });
+};
+
+// --- Settings ---
+export const getSettings = async (): Promise<any> => {
+    const db = await getDB();
+    const transaction = db.transaction(SETTINGS_STORE, 'readonly');
+    const store = transaction.objectStore(SETTINGS_STORE);
+    return new Promise((resolve, reject) => {
+        // 'singleton' is the fixed key for the settings object
+        const request = store.get('singleton');
+        request.onsuccess = () => resolve(request.result?.data || {});
+        request.onerror = () => reject(request.error);
+    });
+};
+
+export const saveSettings = async (settings: any): Promise<void> => {
+    const db = await getDB();
+    const transaction = db.transaction(SETTINGS_STORE, 'readwrite');
+    const store = transaction.objectStore(SETTINGS_STORE);
+    return new Promise((resolve, reject) => {
+        const request = store.put({ id: 'singleton', data: settings });
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
     });
 };

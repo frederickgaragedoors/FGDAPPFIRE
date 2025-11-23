@@ -130,6 +130,7 @@ export const saveJsonFile = async (data: object, filename: string): Promise<void
     const blob = new Blob([jsonString], { type: 'application/json' });
 
     // Use the File System Access API if available
+    // Check if we are in a secure context and not in a cross-origin iframe which might block this API
     if ('showSaveFilePicker' in window) {
         try {
             const handle = await (window as any).showSaveFilePicker({
@@ -145,18 +146,18 @@ export const saveJsonFile = async (data: object, filename: string): Promise<void
             await writable.write(blob);
             await writable.close();
             return; // Success
-        } catch (err) {
+        } catch (err: any) {
             // AbortError is thrown when the user cancels the save dialog.
-            if (err instanceof DOMException && err.name === 'AbortError') {
+            if (err.name === 'AbortError') {
                 console.log('User cancelled save dialog.');
                 return;
             }
-            console.error('Error using showSaveFilePicker, falling back:', err);
+            // Handle SecurityError (cross-origin frames) or other errors gracefully
+            console.warn('File System Access API skipped (fallback to download):', err.message);
         }
     }
 
-    // Fallback for browsers that don't support the API
-    console.log('File System Access API not supported, falling back to direct download.');
+    // Fallback for browsers that don't support the API or failed due to security context
     downloadJsonFile(data, filename);
 };
 
@@ -261,68 +262,66 @@ let googleMapsPromise: Promise<void> | null = null;
 let loadedApiKey: string | null = null;
 
 /**
- * Loads the Google Maps API script.
- * Checks if a script is already present and if the API Key matches.
- * If the API key has changed, it reloads the script.
+ * Loads the Google Maps API script, handling API key changes and auth errors.
  */
 export const loadGoogleMapsScript = (apiKey: string): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    if (typeof window === 'undefined') return reject(new Error("Window not defined"));
+  if (typeof window === 'undefined') {
+    return Promise.reject(new Error("Window not defined"));
+  }
 
-    const scriptId = 'google-maps-script';
-    const existingScript = document.getElementById(scriptId) as HTMLScriptElement;
+  const scriptId = 'google-maps-script';
+  
+  // If a script exists and the key is different, we need to reload.
+  const existingScript = document.getElementById(scriptId) as HTMLScriptElement;
+  if (existingScript && !existingScript.src.includes(`key=${apiKey}`)) {
+      existingScript.remove();
+      (window as any).google = undefined;
+      googleMapsPromise = null;
+      loadedApiKey = null;
+  }
+  
+  // If already loaded/loading with the correct key, return the existing promise.
+  if (googleMapsPromise && loadedApiKey === apiKey) {
+    return googleMapsPromise;
+  }
 
-    // Check if script exists
-    if (existingScript) {
-        const src = existingScript.src;
-        // Check if the key matches
-        if (src.includes(`key=${apiKey}`)) {
-             // Already loaded or loading with correct key
-             if ((window as any).google && (window as any).google.maps && (window as any).google.maps.places) {
-                return resolve();
-             }
-             // Wait for it to be ready
-             const interval = setInterval(() => {
-                if ((window as any).google && (window as any).google.maps && (window as any).google.maps.places) {
-                    clearInterval(interval);
-                    resolve();
-                }
-            }, 100);
-            // Timeout to prevent infinite loop
-            setTimeout(() => {
-                clearInterval(interval);
-                if ((window as any).google) resolve();
-                else reject(new Error("Google Maps failed to load"));
-            }, 5000);
-            return;
-        } else {
-            // API Key changed, remove old script
-            existingScript.remove();
-            (window as any).google = undefined;
-            googleMapsPromise = null;
-        }
+  // If google object is already there with correct key, resolve immediately.
+  if ((window as any).google && loadedApiKey === apiKey) {
+    return Promise.resolve();
+  }
+
+  loadedApiKey = apiKey;
+  googleMapsPromise = new Promise((resolve, reject) => {
+    // Cleanup previous auth failure handler if it exists
+    if ((window as any).gm_authFailure) {
+        delete (window as any).gm_authFailure;
     }
 
-    if (googleMapsPromise && loadedApiKey === apiKey) {
-        return googleMapsPromise.then(resolve).catch(reject);
-    }
+    (window as any).gm_authFailure = () => {
+      reject(new Error('Maps API Not Activated: Please enable the "Maps JavaScript API" in your Google Cloud Console for this project.'));
+      delete (window as any).gm_authFailure;
+    };
 
-    loadedApiKey = apiKey;
-    googleMapsPromise = new Promise((res, rej) => {
-        const script = document.createElement('script');
-        script.id = scriptId;
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
-        script.async = true;
-        script.defer = true;
-        script.onload = () => res();
-        script.onerror = (e) => {
-            googleMapsPromise = null;
-            loadedApiKey = null;
-            rej(e);
-        };
-        document.head.appendChild(script);
-    });
+    const script = document.createElement('script');
+    script.id = scriptId;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+    script.async = true;
+    script.defer = true;
+    
+    script.onload = () => {
+      delete (window as any).gm_authFailure;
+      resolve();
+    };
 
-    googleMapsPromise.then(resolve).catch(reject);
+    script.onerror = () => {
+      googleMapsPromise = null;
+      loadedApiKey = null;
+      delete (window as any).gm_authFailure;
+      reject(new Error('Failed to load Google Maps script. Please check your API key and network connection.'));
+    };
+
+    document.head.appendChild(script);
   });
+
+  return googleMapsPromise;
 };
