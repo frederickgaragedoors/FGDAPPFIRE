@@ -1,12 +1,9 @@
+
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
-import { FirebaseUser as User } from '../firebase.ts';
-import { db, storage } from '../firebase.ts';
-import { 
-  collection, doc, onSnapshot, setDoc, deleteDoc, updateDoc, 
-  type DocumentData, type QuerySnapshot, type DocumentSnapshot 
-} from 'firebase/firestore';
+import { FirebaseUser as User, auth, db, storage } from '../firebase.ts';
+import { collection, doc, onSnapshot, setDoc, deleteDoc, updateDoc, QuerySnapshot, DocumentData, DocumentSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { Contact, ViewState, DefaultFieldSetting, BusinessInfo, JobTemplate, JobStatus, ALL_JOB_STATUSES, JobTicket, FileAttachment, EmailSettings, DEFAULT_EMAIL_SETTINGS, CatalogItem, MapSettings } from '../types.ts';
+import { Contact, ViewState, DefaultFieldSetting, BusinessInfo, JobTemplate, JobStatus, ALL_JOB_STATUSES, JobTicket, FileAttachment, EmailSettings, DEFAULT_EMAIL_SETTINGS, CatalogItem, MapSettings, Theme } from '../types.ts';
 import { generateId } from '../utils.ts';
 import { generateDemoContacts } from '../demoData.ts';
 import * as idb from '../db.ts';
@@ -31,6 +28,7 @@ interface DataContextType {
     contactSelectorDate: Date | null;
     user: User | null;
     isGuestMode: boolean;
+    theme: Theme;
 
     // Actions
     setViewState: (viewState: ViewState) => void;
@@ -43,6 +41,7 @@ interface DataContextType {
     loadDemoData: () => Promise<void>;
     onSwitchToCloud: () => void;
     restoreBackup: (fileContent: string) => Promise<void>;
+    setTheme: (theme: Theme) => void;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -70,6 +69,33 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
     // UI State
     const [viewState, setViewState] = useState<ViewState>({ type: 'dashboard' });
     const [contactSelectorDate, setContactSelectorDate] = useState<Date | null>(null);
+    const [theme, setThemeState] = useState<Theme>('system');
+
+    // Initialize theme from local storage
+    useEffect(() => {
+        const storedTheme = localStorage.getItem('theme') as Theme | null;
+        if (storedTheme) {
+            setThemeState(storedTheme);
+        }
+    }, []);
+
+    const setTheme = (newTheme: Theme) => {
+        setThemeState(newTheme);
+        localStorage.setItem('theme', newTheme);
+    };
+
+    // Apply Theme to document
+    useEffect(() => {
+        const applyTheme = () => {
+            const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            document.documentElement.classList.toggle('dark', isDark);
+        };
+        applyTheme();
+        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        const handleChange = () => applyTheme();
+        mediaQuery.addEventListener('change', handleChange);
+        return () => mediaQuery.removeEventListener('change', handleChange);
+    }, [theme]);
 
     // Load initial data on mode change
     useEffect(() => {
@@ -97,15 +123,15 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
         }
 
         // Contacts Listener
-        const contactsRef = collection(db, 'users', user.uid, 'contacts');
-        const unsubContacts = onSnapshot(contactsRef, (snapshot: QuerySnapshot<DocumentData>) => {
+        const contactsCollection = collection(db, 'users', user.uid, 'contacts');
+        const unsubContacts = onSnapshot(contactsCollection, (snapshot: QuerySnapshot<DocumentData>) => {
             const loadedContacts: Contact[] = snapshot.docs.map(doc => doc.data() as Contact);
             setContacts(loadedContacts);
         });
 
         // Settings Listener (Single Document)
-        const settingsRef = doc(db, 'users', user.uid, 'settings', 'general');
-        const unsubSettings = onSnapshot(settingsRef, (docSnap: DocumentSnapshot<DocumentData>) => {
+        const settingsDoc = doc(db, 'users', user.uid, 'settings', 'general');
+        const unsubSettings = onSnapshot(settingsDoc, (docSnap: DocumentSnapshot<DocumentData>) => {
             setSettings(docSnap.exists() ? docSnap.data() : {});
         });
 
@@ -185,8 +211,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
             if (newFileObjects['profile_photo'] && finalPhotoUrl.startsWith('data:')) {
                 const file = newFileObjects['profile_photo'];
                 const photoRef = ref(storage, `users/${user.uid}/contacts/${contactId}/profile_photo_${Date.now()}`);
-                const snapshot = await uploadBytes(photoRef, file);
-                finalPhotoUrl = await getDownloadURL(snapshot.ref);
+                await uploadBytes(photoRef, file);
+                finalPhotoUrl = await getDownloadURL(photoRef);
             }
 
             const processedFiles: FileAttachment[] = [];
@@ -194,8 +220,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
                 if (newFileObjects[file.id]) {
                     const fileObj = newFileObjects[file.id];
                     const fileRef = ref(storage, `users/${user.uid}/contacts/${contactId}/${file.id}_${file.name}`);
-                    const snapshot = await uploadBytes(fileRef, fileObj);
-                    const url = await getDownloadURL(snapshot.ref);
+                    await uploadBytes(fileRef, fileObj);
+                    const url = await getDownloadURL(fileRef);
                     processedFiles.push({ ...file, dataUrl: url });
                 } else {
                     processedFiles.push(file); // Keep existing file from cloud
@@ -209,7 +235,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
                 files: processedFiles,
             };
 
-            await setDoc(doc(db, 'users', user.uid, 'contacts', contactId), contactToSave, { merge: true });
+            const contactDoc = doc(db, 'users', user.uid, 'contacts', contactId);
+            await setDoc(contactDoc, contactToSave, { merge: true });
             navigateToDetail(contactId, contactToSave);
 
         } catch (error) {
@@ -232,11 +259,12 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
             } else {
                 if (!user || !db || !storage || !contactToDelete) throw new Error("User or Firebase services not available.");
                 
-                await deleteDoc(doc(db, 'users', user.uid, 'contacts', id));
+                const contactDoc = doc(db, 'users', user.uid, 'contacts', id);
+                await deleteDoc(contactDoc);
                 
                 const filesToDelete = [];
                 if (contactToDelete.photoUrl && contactToDelete.photoUrl.includes('firebasestorage.googleapis.com')) {
-                    filesToDelete.push(ref(storage, contactToDelete.photoUrl));
+                    filesToDelete.push(ref(storage, contactToDelete.photoUrl)); 
                 }
                 contactToDelete.files.forEach(file => {
                     if (file.dataUrl && file.dataUrl.includes('firebasestorage.googleapis.com')) {
@@ -244,7 +272,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
                     }
                 });
 
-                await Promise.all(filesToDelete.map(fileRef => deleteObject(fileRef).catch(err => console.warn(`Failed to delete file: ${fileRef.fullPath}`, err))));
+                await Promise.all(filesToDelete.map(fileRef => deleteObject(fileRef).catch(err => console.warn(`Failed to delete file`, err))));
             }
             return true; // Indicate success
         } catch (error) {
@@ -274,8 +302,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
             for (const file of newFiles) {
                 const fileObj = newFileObjects[file.id];
                 const fileRef = ref(storage, `users/${user.uid}/contacts/${contactId}/${file.id}_${file.name}`);
-                const snapshot = await uploadBytes(fileRef, fileObj);
-                const downloadURL = await getDownloadURL(snapshot.ref);
+                await uploadBytes(fileRef, fileObj);
+                const downloadURL = await getDownloadURL(fileRef);
                 uploadedFiles.push({ ...file, dataUrl: downloadURL });
             }
             const updatedContact = { ...contact, files: [...contact.files, ...uploadedFiles] };
@@ -338,8 +366,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
                 const logoRef = ref(storage, `users/${user.uid}/settings/logo_${Date.now()}`);
                 const res = await fetch(updates.businessInfo.logoUrl);
                 const blob = await res.blob();
-                const snapshot = await uploadBytes(logoRef, blob);
-                updates.businessInfo.logoUrl = await getDownloadURL(snapshot.ref);
+                await uploadBytes(logoRef, blob);
+                updates.businessInfo.logoUrl = await getDownloadURL(logoRef);
             }
             const settingsRef = doc(db, 'users', user.uid, 'settings', 'general');
             await setDoc(settingsRef, updates, { merge: true });
@@ -365,7 +393,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
         if (user && db) {
             try {
                 for (const contact of demoContacts) {
-                    await setDoc(doc(db, 'users', user.uid, 'contacts', contact.id), contact);
+                    const contactRef = doc(db, 'users', user.uid, 'contacts', contact.id);
+                    await setDoc(contactRef, contact);
                 }
                 alert("Demo data uploaded.");
                 setViewState({ type: 'list' });
@@ -379,7 +408,6 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
     const restoreBackup = async (fileContent: string) => {
         try {
             const data = JSON.parse(fileContent);
-            if (!window.confirm("Restoring a backup will overwrite your current data. Are you sure you want to proceed?")) return;
 
             // Extract Settings
             const settingsUpdates: any = {};
@@ -409,7 +437,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
 
                 // Save Contacts
                 for (const contact of contactsToRestore) {
-                    await setDoc(doc(db, 'users', user.uid, 'contacts', contact.id), contact);
+                    const contactRef = doc(db, 'users', user.uid, 'contacts', contact.id);
+                    await setDoc(contactRef, contact);
                 }
             }
             
@@ -437,6 +466,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
         contactSelectorDate,
         user,
         isGuestMode,
+        theme,
 
         setViewState,
         setContactSelectorDate,
@@ -448,6 +478,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
         loadDemoData,
         onSwitchToCloud,
         restoreBackup,
+        setTheme,
     };
 
     return (
