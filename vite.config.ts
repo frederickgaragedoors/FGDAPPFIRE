@@ -21,7 +21,7 @@ export default defineConfig(({ mode }) => {
       plugins: [
         react(),
         // UNCOMMENT THE SECTION BELOW TO ENABLE PWA (Offline Support)
-        /*
+        
         VitePWA({
           registerType: 'autoUpdate',
           includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
@@ -40,7 +40,7 @@ export default defineConfig(({ mode }) => {
             ]
           }
         })
-        */
+        
       ],
       define: {
         // Use || '' to ensure it returns a string even if the env var is undefined during build
