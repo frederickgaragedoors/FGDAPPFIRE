@@ -191,14 +191,10 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
     const handleSaveContact = async (contactData: Omit<Contact, 'id'> & { id?: string }, newFileObjects: { [id: string]: File }) => {
         const contactId = contactData.id || generateId();
         let finalPhotoUrl = contactData.photoUrl;
-        let finalFiles = [...contactData.files];
-
-        // FIX: Ensure jobTickets is always an initialized array to prevent errors when adding the first job.
-        contactData.jobTickets = contactData.jobTickets || [];
+        let finalFiles = [...(contactData.files || [])];
 
         if (isGuestMode) {
-            // FIX: jobTickets property is now guaranteed to exist on newContact.
-            const newContact = { ...contactData, id: contactId } as Contact;
+            const newContact = { ...contactData, id: contactId, jobTickets: contactData.jobTickets || [] } as Contact;
             const updatedContacts = contactData.id
                 ? contacts.map(c => c.id === contactData.id ? newContact : c)
                 : [...contacts, newContact];
@@ -212,7 +208,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
         if (!user || !db || !storage) return;
 
         try {
-            if (newFileObjects['profile_photo'] && finalPhotoUrl.startsWith('data:')) {
+            if (newFileObjects['profile_photo'] && finalPhotoUrl && finalPhotoUrl.startsWith('data:')) {
                 const file = newFileObjects['profile_photo'];
                 const photoRef = ref(storage, `users/${user.uid}/contacts/${contactId}/profile_photo_${Date.now()}`);
                 await uploadBytes(photoRef, file);
@@ -232,11 +228,18 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
                 }
             }
 
+            // Explicitly build the object to ensure all fields, especially empty arrays, are included.
             const contactToSave: Contact = {
-                ...(contactData as Contact),
                 id: contactId,
-                photoUrl: finalPhotoUrl,
+                name: contactData.name || '',
+                email: contactData.email || '',
+                phone: contactData.phone || '',
+                address: contactData.address || '',
+                photoUrl: finalPhotoUrl || '',
                 files: processedFiles,
+                customFields: contactData.customFields || [],
+                jobTickets: contactData.jobTickets || [], // This is the crucial fix
+                doorProfiles: contactData.doorProfiles || [],
             };
 
             const contactDoc = doc(db, 'users', user.uid, 'contacts', contactId);
