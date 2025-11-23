@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FirebaseUser as User } from './firebase.ts';
-import { auth as authInstance, isFirebaseConfigured } from './firebase.ts';
+import { FirebaseUser as User, auth, isFirebaseConfigured } from './firebase.ts';
 import { onAuthStateChanged } from 'firebase/auth';
 
 import Header from './components/Header.tsx';
@@ -11,7 +10,8 @@ import Settings from './components/Settings.tsx';
 import Dashboard from './components/Dashboard.tsx';
 import CalendarView from './components/CalendarView.tsx';
 import InvoiceView from './components/InvoiceView.tsx';
-import JobDetailView from './components/JobDetailView.tsx';
+// FIX: Changed to a named import to resolve a module resolution issue.
+import { JobDetailView } from './components/JobDetailView.tsx';
 import ContactSelectorModal from './components/ContactSelectorModal.tsx';
 import RouteView from './components/RouteView.tsx';
 import Login from './components/Login.tsx';
@@ -36,7 +36,7 @@ const AppContent: React.FC = () => {
         switch (viewState.type) {
             case 'dashboard': return <Dashboard onViewJobDetail={(contactId, ticketId) => setViewState({ type: 'job_detail', contactId, ticketId })} />;
             case 'calendar': return <CalendarView onAddJob={(date) => setContactSelectorDate(date)} onViewJob={(contactId, ticketId) => setViewState({ type: 'job_detail', contactId, ticketId })} />;
-            case 'route': return <RouteView onGoToSettings={() => setViewState({ type: 'settings' })} onBack={() => setViewState({ type: 'dashboard' })} />;
+            case 'route': return <RouteView onGoToSettings={() => setViewState({ type: 'settings' })} onBack={() => setViewState({ type: 'dashboard' })} onViewJobDetail={(contactId, ticketId) => setViewState({ type: 'job_detail', contactId, ticketId })} initialDate={viewState.initialDate} />;
             case 'list': return <ContactList selectedContactId={null} onSelectContact={(id) => setViewState({ type: 'detail', id })} onAddJob={(id) => setViewState({ type: 'detail', id, initialJobDate: createDateTrigger(new Date().toISOString().split('T')[0]) })} />;
             case 'detail':
                 if (!selectedContact) return <div className="p-4">Contact not found</div>;
@@ -50,7 +50,7 @@ const AppContent: React.FC = () => {
             case 'invoice':
                 return <InvoiceView contactId={viewState.contactId} ticketId={viewState.ticketId} from={viewState.from} onClose={() => setViewState(viewState.from === 'contact_detail' ? { type: 'detail', id: viewState.contactId } : { type: 'job_detail', contactId: viewState.contactId, ticketId: viewState.ticketId })} />;
             case 'job_detail':
-                return <JobDetailView contactId={viewState.contactId} ticketId={viewState.ticketId} onBack={() => setViewState({ type: 'detail', id: viewState.contactId })} onViewInvoice={() => setViewState({ type: 'invoice', contactId: viewState.contactId, ticketId: viewState.ticketId, from: 'job_detail' })} />;
+                return <JobDetailView contactId={viewState.contactId} ticketId={viewState.ticketId} onBack={() => setViewState({ type: 'detail', id: viewState.contactId })} onViewInvoice={() => setViewState({ type: 'invoice', contactId: viewState.contactId, ticketId: viewState.ticketId, from: 'job_detail' })} onViewRouteForDate={(date) => setViewState({ type: 'route', initialDate: date })} />;
             default: return null;
         }
     };
@@ -91,7 +91,6 @@ function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [isGuestMode, setIsGuestMode] = useState(false);
   const [configInput, setConfigInput] = useState('');
-  const [currentTheme, setCurrentTheme] = useState<'light' | 'dark' | 'system'>('system');
 
   useEffect(() => {
     const guestModePref = localStorage.getItem('isGuestMode') === 'true';
@@ -99,12 +98,12 @@ function App() {
       setIsGuestMode(true);
     }
 
-    if (!isFirebaseConfigured || !authInstance) {
+    if (!isFirebaseConfigured || !auth) {
         setAuthLoading(false);
         return;
     }
 
-    const unsubscribe = onAuthStateChanged(authInstance, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
         if (!guestModePref) {
             setUser(currentUser);
         }
@@ -112,27 +111,6 @@ function App() {
     });
     return () => unsubscribe();
   }, []);
-  
-  // Theme Handling from localStorage
-  useEffect(() => {
-    const storedTheme = localStorage.getItem('theme') as 'light' | 'dark' | 'system' | null;
-    if (storedTheme) {
-        setCurrentTheme(storedTheme);
-    }
-  }, []);
-
-  // Apply Theme to document
-  useEffect(() => {
-      localStorage.setItem('theme', currentTheme);
-      const applyTheme = () => {
-          const isDark = currentTheme === 'dark' || (currentTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-          document.documentElement.classList.toggle('dark', isDark);
-      };
-      applyTheme();
-      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      mediaQuery.addEventListener('change', applyTheme);
-      return () => mediaQuery.removeEventListener('change', applyTheme);
-  }, [currentTheme]);
 
   const handleSaveConfig = () => {
       const config: Record<string, string> = Object.fromEntries(

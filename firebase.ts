@@ -1,13 +1,7 @@
-import { initializeApp, type FirebaseApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, type Auth, type User } from 'firebase/auth';
-import { getFirestore, enableIndexedDbPersistence, type Firestore, type QuerySnapshot, type DocumentData, type DocumentSnapshot } from 'firebase/firestore';
-import { getStorage, type FirebaseStorage } from 'firebase/storage';
-
-// Export types for use in other files, aliased to match previous usage
-export type FirebaseUser = User;
-export type FirebaseQuerySnapshot<T = DocumentData> = QuerySnapshot<T>;
-export type FirebaseDocumentData = DocumentData;
-export type FirebaseDocumentSnapshot<T = DocumentData> = DocumentSnapshot<T>;
+import { initializeApp } from 'firebase/app';
+import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { getFirestore, enableIndexedDbPersistence } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 
 // Helper to get env vars from Vite or LocalStorage (for preview support)
 const getEnvVar = (key: string): string => {
@@ -36,12 +30,15 @@ const firebaseConfig = {
   appId: getEnvVar('VITE_FIREBASE_APP_ID')
 };
 
-// Export these as let variables so they can be conditionally assigned
-let app: FirebaseApp | undefined;
-let authInstance: Auth | undefined;
+// Export types for use in other files
+import type { User } from 'firebase/auth';
+export type FirebaseUser = User;
+
+let app;
+let auth: ReturnType<typeof getAuth> | undefined;
+let db: ReturnType<typeof getFirestore> | undefined;
+let storage: ReturnType<typeof getStorage> | undefined;
 let googleProvider: GoogleAuthProvider | undefined;
-let db: Firestore | undefined;
-let storageInstance: FirebaseStorage | undefined;
 
 // Check if config is valid (basic check for apiKey)
 export const isFirebaseConfigured = !!(firebaseConfig.apiKey && firebaseConfig.apiKey.length > 0);
@@ -49,10 +46,10 @@ export const isFirebaseConfigured = !!(firebaseConfig.apiKey && firebaseConfig.a
 if (isFirebaseConfigured) {
   try {
     app = initializeApp(firebaseConfig);
-    authInstance = getAuth(app);
-    googleProvider = new GoogleAuthProvider();
+    auth = getAuth(app);
     db = getFirestore(app);
-    storageInstance = getStorage(app);
+    storage = getStorage(app);
+    googleProvider = new GoogleAuthProvider();
 
     // Enable offline persistence
     enableIndexedDbPersistence(db).catch((err) => {
@@ -69,5 +66,4 @@ if (isFirebaseConfigured) {
   console.warn("Firebase API keys are missing. App entering setup mode.");
 }
 
-// Components should check `isFirebaseConfigured` before using these.
-export { authInstance as auth, googleProvider, db, storageInstance as storage };
+export { auth, db, storage, googleProvider };

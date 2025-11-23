@@ -1,4 +1,5 @@
 
+
 export interface FileAttachment {
   id: string;
   name: string;
@@ -205,6 +206,8 @@ export type ViewState =
   | { type: 'settings' }
   | { type: 'dashboard' }
   | { type: 'calendar' }
-  | { type: 'route' }
+  | { type: 'route'; initialDate?: string }
   | { type: 'invoice'; contactId: string; ticketId: string; from?: 'contact_detail' | 'job_detail' }
   | { type: 'job_detail'; contactId: string; ticketId: string };
+
+export type Theme = 'light' | 'dark' | 'system';

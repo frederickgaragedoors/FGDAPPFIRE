@@ -6,34 +6,53 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0ea5e9" />
     <title>Business Contacts Manager</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Tailwind Configuration (MUST be defined before the CDN script) -->
     <script>
-      // Explicitly configure Tailwind to use the class strategy for dark mode
-      // And override the default 'slate' palette to be neutral/black
-      tailwind.config = {
-        darkMode: 'class',
-        theme: {
-          extend: {
-            colors: {
-              slate: {
-                50: '#fafafa',
-                100: '#f5f5f5',
-                200: '#e5e5e5',
-                300: '#d4d4d4',
-                400: '#a3a3a3',
-                500: '#737373',
-                600: '#525252',
-                700: '#404040',
-                800: '#171717', // Mapped to Neutral-900 for darker cards
-                900: '#0a0a0a', // Mapped to Neutral-950 for very dark background
-                950: '#000000', // Pure black
+      window.tailwind = {
+        config: {
+          darkMode: 'class',
+          theme: {
+            extend: {
+              colors: {
+                slate: {
+                  50: '#fafafa',
+                  100: '#f5f5f5',
+                  200: '#e5e5e5',
+                  300: '#d4d4d4',
+                  400: '#a3a3a3',
+                  500: '#737373',
+                  600: '#525252',
+                  700: '#404040',
+                  800: '#171717',
+                  900: '#0a0a0a',
+                  950: '#000000',
+                }
               }
             }
           }
         }
       }
     </script>
+    
+    <!-- Tailwind CSS CDN for reliable preview styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
     <style>
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+          'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      code {
+        font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+          monospace;
+      }
+
       /* Add some subtle transitions for a more modern feel */
       .card-hover {
         transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
@@ -45,8 +64,51 @@
       .tab-button {
         transition: color 0.2s ease-in-out, border-color 0.2s ease-in-out;
       }
+
+      /* Hide scrollbar for Chrome, Safari and Opera */
+      .no-scrollbar::-webkit-scrollbar {
+          display: none;
+      }
+
+      /* Hide scrollbar for IE, Edge and Firefox */
+      .no-scrollbar {
+          -ms-overflow-style: none;  /* IE and Edge */
+          scrollbar-width: none;  /* Firefox */
+      }
+
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      .animate-fadeIn {
+        animation: fadeIn 0.3s ease-out forwards;
+      }
+      
+      /* Google Places Autocomplete z-index fix */
+      .pac-container {
+          z-index: 99999 !important;
+      }
     </style>
-    <link rel="stylesheet" href="./index.css">
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/",
+    "path": "https://aistudiocdn.com/path@^0.12.7",
+    "vite": "https://aistudiocdn.com/vite@^7.2.4",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
+    "electron": "https://aistudiocdn.com/electron@^39.2.3",
+    "url": "https://aistudiocdn.com/url@^0.11.4",
+    "http": "https://aistudiocdn.com/http@^0.0.1-security",
+    "fs": "https://aistudiocdn.com/fs@^0.0.1-security",
+    "jspdf": "https://aistudiocdn.com/jspdf@^3.0.4",
+    "jspdf-autotable": "https://aistudiocdn.com/jspdf-autotable@^5.0.2"
+  }
+}
+</script>
 <link rel="stylesheet" href="/index.css">
 </head>
   <body class="bg-slate-100 dark:bg-slate-900">
