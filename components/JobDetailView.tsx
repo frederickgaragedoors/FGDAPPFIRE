@@ -3,6 +3,7 @@ import { Contact, JobTicket, jobStatusColors, paymentStatusColors, paymentStatus
 import { useData } from '../contexts/DataContext.tsx';
 import JobTicketModal from './JobTicketModal.tsx';
 import InspectionModal from './InspectionModal.tsx';
+import ConfirmationModal from './ConfirmationModal.tsx';
 import {
   ArrowLeftIcon,
   PhoneIcon,
@@ -15,6 +16,8 @@ import {
   CarIcon,
   UserCircleIcon,
   ClipboardCheckIcon,
+  MapIcon,
+  CurrencyDollarIcon,
 } from './icons.tsx';
 import { calculateJobTicketTotal, formatTime, processTemplate, formatPhoneNumber } from '../utils.ts';
 
@@ -23,13 +26,16 @@ interface JobDetailViewProps {
   ticketId: string;
   onBack: () => void;
   onViewInvoice: () => void;
+  onViewRouteForDate: (date: string) => void;
 }
 
-const JobDetailView: React.FC<JobDetailViewProps> = ({
+// FIX: Changed to a named export to resolve a module resolution issue.
+export const JobDetailView: React.FC<JobDetailViewProps> = ({
   contactId,
   ticketId,
   onBack,
   onViewInvoice,
+  onViewRouteForDate,
 }) => {
   const { 
     contacts,
@@ -46,6 +52,7 @@ const JobDetailView: React.FC<JobDetailViewProps> = ({
 
   const [isJobTicketModalOpen, setIsJobTicketModalOpen] = useState(false);
   const [isInspectionModalOpen, setIsInspectionModalOpen] = useState(false);
+  const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
 
   if (!contact || !ticket) {
         return (
@@ -90,12 +97,10 @@ const JobDetailView: React.FC<JobDetailViewProps> = ({
   const repairedItems = inspectionItems.filter(i => i.status === 'Repaired').length;
   const passedItems = inspectionItems.filter(i => i.status === 'Pass').length;
   
-  const handleDeleteTicket = () => {
-     if (window.confirm('Are you sure you want to delete this job ticket?')) {
-        const updatedTickets = contact.jobTickets.filter(t => t.id !== ticket.id);
-        handleUpdateContactJobTickets(contact.id, updatedTickets);
-        onBack();
-     }
+  const performDeleteTicket = () => {
+    const updatedTickets = contact.jobTickets.filter(t => t.id !== ticket.id);
+    handleUpdateContactJobTickets(contact.id, updatedTickets);
+    onBack();
   };
 
   return (
@@ -111,145 +116,159 @@ const JobDetailView: React.FC<JobDetailViewProps> = ({
               Job Details
             </h2>
           </div>
-          <div className="flex items-center space-x-1 sm:space-x-2">
+          <div className="flex items-center space-x-2">
              <button 
                 onClick={onViewInvoice} 
-                className="p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors"
+                className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300 hover:bg-sky-200 dark:hover:bg-sky-800 transition-colors"
                 title="View PDF"
             >
                 <ClipboardListIcon className="w-5 h-5" />
+                <span className="hidden sm:inline">PDF</span>
             </button>
             <button 
                 onClick={() => setIsJobTicketModalOpen(true)} 
-                className="p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors"
+                className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
                 title="Edit Job"
             >
                 <EditIcon className="w-5 h-5" />
+                <span className="hidden sm:inline">Edit</span>
             </button>
              <button 
-                onClick={handleDeleteTicket} 
-                className="flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium text-red-600 bg-red-100 dark:bg-red-900/50 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900 transition-colors"
+                onClick={() => setIsConfirmationModalOpen(true)}
+                className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium text-red-600 bg-red-100 dark:bg-red-900/50 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900 transition-colors"
                 title="Delete Job"
             >
                 <TrashIcon className="w-5 h-5" />
+                <span className="hidden sm:inline">Delete</span>
             </button>
           </div>
         </div>
 
-        {/* Compact Status Bar */}
-        <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between gap-4">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                 <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Status</span>
-                 <span className={`px-2 py-0.5 rounded text-sm font-bold ${statusColor.base} ${statusColor.text} inline-block`}>{ticket.status}</span>
-            </div>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 text-right sm:text-left">
-                 <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Payment</span>
-                 <span className={`px-2 py-0.5 rounded text-sm font-bold ${paymentStatusColor.base} ${paymentStatusColor.text} inline-block`}>{paymentStatusLabel}</span>
-            </div>
-        </div>
-
         <div className="px-4 sm:px-6 py-6 flex-grow space-y-6">
           
-          {/* Job Logistics Card - Ticket Stub Style */}
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
-            {/* Header Strip */}
-            <div className="bg-slate-800 text-white p-3 flex justify-between items-center">
-                <div className="flex space-x-4">
-                    <div>
-                        <span className="text-[10px] uppercase opacity-70 block">Date</span>
-                        <span className="font-bold">
-                            {new Date(ticket.date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })}
-                        </span>
-                    </div>
-                    <div>
-                        <span className="text-[10px] uppercase opacity-70 block">Time</span>
-                        <span className="font-bold">{ticket.time ? formatTime(ticket.time) : 'Anytime'}</span>
-                    </div>
-                </div>
-                <div className="text-right">
-                    <span className="text-[10px] uppercase opacity-70 block">Ticket #</span>
-                    <span className="font-mono font-bold text-sky-400">{ticket.id}</span>
-                </div>
+          {/* Top Info Header Card */}
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div className="grid grid-cols-3">
+              {/* Left Column: Date and Ticket */}
+              <div className="col-span-2 p-4">
+                  <div className="flex items-center">
+                      <div className="min-w-0">
+                          <p className="font-semibold text-lg text-slate-800 dark:text-slate-100 break-words">
+                              {new Date(ticket.date).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })}
+                          </p>
+                          <p className="text-sm text-slate-500 dark:text-slate-400">
+                              {ticket.time ? formatTime(ticket.time) : 'Anytime'} • Est. {ticket.duration || 60} min
+                          </p>
+                      </div>
+                  </div>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 font-mono mt-4">Ticket #{ticket.id}</p>
+              </div>
+
+              {/* Right Column: Statuses */}
+              <div className="col-span-1 flex flex-col">
+                  <div className={`flex-1 p-4 flex flex-col justify-center items-center text-center ${statusColor.base}`}>
+                      <span className={`text-xs uppercase ${statusColor.text} opacity-75`}>Job Status</span>
+                      <p className={`font-bold text-base ${statusColor.text} truncate`}>
+                          {ticket.status}
+                      </p>
+                  </div>
+                  <div className={`flex-1 p-4 flex flex-col justify-center items-center text-center ${paymentStatusColor.base}`}>
+                      <span className={`text-xs uppercase ${paymentStatusColor.text} opacity-75`}>Payment</span>
+                      <p className={`font-bold text-base ${paymentStatusColor.text} truncate`}>
+                          {paymentStatusLabel}
+                      </p>
+                  </div>
+              </div>
             </div>
+          </div>
 
-            {/* Body */}
-            <div className="p-5 pb-2">
-                <div className="mb-6">
-                    <span className="text-xs font-bold text-slate-400 uppercase mb-1 block">Work Notes</span>
-                    <p className="text-slate-800 dark:text-slate-200 text-base whitespace-pre-wrap break-words">
-                        {ticket.notes || 'No notes provided for this job.'}
-                    </p>
-                </div>
 
-                <div className="border-t border-slate-100 dark:border-slate-700 pt-4 grid grid-cols-2 gap-4">
-                    {/* Location Col */}
-                    <div className="min-w-0">
-                            <p className="text-xs font-bold text-slate-400 uppercase mb-2 flex items-center">
-                            <MapPinIcon className="w-3 h-3 mr-1 flex-shrink-0" /> Site Location
-                            </p>
-                            <a
-                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(serviceLocation)}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="font-semibold text-sm text-slate-800 dark:text-slate-200 hover:text-sky-600 hover:underline whitespace-pre-line block break-words"
-                            >
-                                {serviceLocation || 'No address provided'}
-                            </a>
-                            {ticket.jobLocationContactName && (
-                                <p className="text-xs text-slate-500 mt-1 truncate">Contact: {ticket.jobLocationContactName}</p>
-                            )}
-                            {ticket.jobLocationContactPhone && (
-                                <div className="flex items-center mt-1 space-x-2">
-                                    <a href={`tel:${ticket.jobLocationContactPhone}`} className="text-xs text-slate-500 hover:text-sky-600 hover:underline flex items-center">
-                                       <PhoneIcon className="w-3 h-3 mr-1" />
-                                       {ticket.jobLocationContactPhone}
-                                    </a>
-                                </div>
-                            )}
-                    </div>
+          {/* Main Info Card */}
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
+              <div className="p-5">
+                  <div className="border-b border-slate-200 dark:border-slate-700 -mx-5 px-5 pb-5">
+                      <span className="text-xs font-bold text-slate-400 uppercase mb-1 block">Work Notes</span>
+                      <p className="text-slate-800 dark:text-slate-200 text-base whitespace-pre-wrap break-words">
+                          {ticket.notes || 'No notes provided for this job.'}
+                      </p>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-5">
+                      {/* Location Col */}
+                      <div className="min-w-0">
+                              <p className="text-xs font-bold text-slate-400 uppercase mb-2 flex items-center">
+                              <MapPinIcon className="w-3 h-3 mr-1 flex-shrink-0" /> Site Location
+                              </p>
+                              <a
+                                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(serviceLocation)}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="font-semibold text-sm text-slate-800 dark:text-slate-200 hover:text-sky-600 hover:underline whitespace-pre-line block break-words"
+                              >
+                                  {serviceLocation || 'No address provided'}
+                              </a>
+                              {ticket.jobLocationContactName && (
+                                  <p className="text-xs text-slate-500 mt-1 truncate">Contact: {ticket.jobLocationContactName}</p>
+                              )}
+                              {ticket.jobLocationContactPhone && (
+                                  <div className="flex items-center mt-1 space-x-2">
+                                      <a href={`tel:${ticket.jobLocationContactPhone}`} className="text-xs text-slate-500 hover:text-sky-600 hover:underline flex items-center">
+                                      <PhoneIcon className="w-3 h-3 mr-1" />
+                                      {ticket.jobLocationContactPhone}
+                                      </a>
+                                  </div>
+                              )}
+                      </div>
 
-                    {/* Client Col */}
-                    <div className="min-w-0">
-                            <p className="text-xs font-bold text-slate-400 uppercase mb-2 flex items-center">
-                            <UserCircleIcon className="w-3 h-3 mr-1 flex-shrink-0" /> Client / Billing
-                            </p>
-                            <div className="flex flex-col">
-                                <button onClick={onBack} className="font-semibold text-sm text-slate-800 dark:text-slate-100 hover:underline text-left truncate max-w-full">
-                                    {contact.name}
-                                </button>
-                                <a href={`tel:${contact.phone}`} className="text-xs text-slate-500 mt-1 truncate hover:text-sky-600 hover:underline block">
-                                    {contact.phone}
-                                </a>
-                                <a href={`mailto:${contact.email}`} className="text-xs text-slate-500 hover:text-sky-600 block mt-0.5 truncate">{contact.email}</a>
-                            </div>
-                    </div>
-                </div>
-            </div>
+                      {/* Client Col */}
+                      <div className="min-w-0">
+                              <p className="text-xs font-bold text-slate-400 uppercase mb-2 flex items-center">
+                              <UserCircleIcon className="w-3 h-3 mr-1 flex-shrink-0" /> Client / Billing
+                              </p>
+                              <div className="flex flex-col">
+                                  <button onClick={onBack} className="font-semibold text-sm text-slate-800 dark:text-slate-100 hover:underline text-left truncate max-w-full">
+                                      {contact.name}
+                                  </button>
+                                  <a href={`tel:${contact.phone}`} className="text-xs text-slate-500 mt-1 truncate hover:text-sky-600 hover:underline block">
+                                      {contact.phone}
+                                  </a>
+                                  <a href={`mailto:${contact.email}`} className="text-xs text-slate-500 hover:text-sky-600 block mt-0.5 truncate">{contact.email}</a>
+                              </div>
+                      </div>
+                  </div>
 
-             {/* Action Footer */}
-            <div className="bg-slate-50 dark:bg-slate-900/30 border-t border-slate-200 dark:border-slate-700 p-3">
-                 <div className="grid grid-cols-3 gap-3">
-                     <a href={`tel:${primaryPhone}`} className="flex flex-col items-center justify-center p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-sm hover:bg-green-50 dark:hover:bg-green-900/20 hover:border-green-200 dark:hover:border-green-800 transition-all group">
-                         <PhoneIcon className="w-5 h-5 text-green-600 dark:text-green-500 mb-1 group-hover:scale-110 transition-transform" />
-                         <span className="text-xs font-medium text-slate-700 dark:text-slate-300 group-hover:text-green-700 dark:group-hover:text-green-400">Call</span>
-                     </a>
-                     <a href={`sms:${primaryPhone}`} className="flex flex-col items-center justify-center p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-sm hover:bg-sky-50 dark:hover:bg-sky-900/20 hover:border-sky-200 dark:hover:border-sky-800 transition-all group">
-                         <MessageIcon className="w-5 h-5 text-sky-600 dark:text-sky-500 mb-1 group-hover:scale-110 transition-transform" />
-                         <span className="text-xs font-medium text-slate-700 dark:text-slate-300 group-hover:text-sky-700 dark:group-hover:text-sky-400">Text</span>
-                     </a>
-                     <a href={smsLink} className="flex flex-col items-center justify-center p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all group">
-                         <CarIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-500 mb-1 group-hover:scale-110 transition-transform" />
-                         <span className="text-xs font-medium text-slate-700 dark:text-slate-300 group-hover:text-indigo-700 dark:group-hover:text-indigo-400">On My Way</span>
-                     </a>
-                 </div>
-            </div>
+                  {/* Action Footer */}
+                  <div className="bg-slate-50 dark:bg-slate-900/30 border-t border-slate-200 dark:border-slate-700 p-3 -mx-5 rounded-b-lg">
+                      <div className="grid grid-cols-4 gap-3">
+                          <a href={`tel:${primaryPhone}`} className="flex flex-col items-center justify-center p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-sm hover:bg-green-50 dark:hover:bg-green-900/20 hover:border-green-200 dark:hover:border-green-800 transition-all group">
+                              <PhoneIcon className="w-5 h-5 text-green-600 dark:text-green-500 mb-1 group-hover:scale-110 transition-transform" />
+                              <span className="text-xs font-medium text-slate-700 dark:text-slate-300 group-hover:text-green-700 dark:group-hover:text-green-400">Call</span>
+                          </a>
+                          <a href={`sms:${primaryPhone}`} className="flex flex-col items-center justify-center p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-sm hover:bg-sky-50 dark:hover:bg-sky-900/20 hover:border-sky-200 dark:hover:border-sky-800 transition-all group">
+                              <MessageIcon className="w-5 h-5 text-sky-600 dark:text-sky-500 mb-1 group-hover:scale-110 transition-transform" />
+                              <span className="text-xs font-medium text-slate-700 dark:text-slate-300 group-hover:text-sky-700 dark:group-hover:text-sky-400">Text</span>
+                          </a>
+                          <a href={smsLink} className="flex flex-col items-center justify-center p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all group text-center">
+                              <CarIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-500 mb-1 group-hover:scale-110 transition-transform" />
+                              <span className="text-xs font-medium text-slate-700 dark:text-slate-300 group-hover:text-indigo-700 dark:group-hover:text-indigo-400 leading-tight text-center">On My Way</span>
+                          </a>
+                          <button
+                              onClick={() => onViewRouteForDate(ticket.date)}
+                              className="flex flex-col items-center justify-center p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-sm hover:bg-slate-50 dark:hover:bg-slate-900/20 hover:border-slate-300 dark:hover:border-slate-500 transition-all group text-center"
+                          >
+                              <MapIcon className="w-5 h-5 text-slate-600 dark:text-slate-400 mb-1 group-hover:scale-110 transition-transform" />
+                              <span className="text-xs font-medium text-slate-700 dark:text-slate-300 group-hover:text-slate-800 dark:group-hover:text-slate-200 leading-tight text-center">View Route</span>
+                          </button>
+                      </div>
+                  </div>
+              </div>
           </div>
           
           {/* Safety Inspection Card */}
           <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
               <div className="flex justify-between items-center mb-4">
                   <div className="flex items-center">
-                      <ClipboardCheckIcon className="w-6 h-6 text-slate-600 dark:text-slate-300 mr-2" />
+                      <ClipboardCheckIcon className="w-6 h-6 text-slate-600 dark:text-slate-300 mr-3" />
                       <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Safety Inspection</h3>
                   </div>
                   {totalInspectionItems > 0 && (
@@ -295,7 +314,10 @@ const JobDetailView: React.FC<JobDetailViewProps> = ({
 
           {/* Costs Card */}
           <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
-            <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4 border-b dark:border-slate-700 pb-2">Cost Breakdown</h3>
+            <div className="flex items-center mb-4 border-b dark:border-slate-700 pb-3">
+                <CurrencyDollarIcon className="w-6 h-6 text-slate-600 dark:text-slate-300 mr-3" />
+                <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Cost Breakdown</h3>
+            </div>
             {hasCosts ? (
                 <>
                     <div className="">
@@ -380,8 +402,16 @@ const JobDetailView: React.FC<JobDetailViewProps> = ({
           onClose={() => setIsInspectionModalOpen(false)}
         />
       )}
+
+      {isConfirmationModalOpen && (
+        <ConfirmationModal
+          isOpen={isConfirmationModalOpen}
+          onClose={() => setIsConfirmationModalOpen(false)}
+          onConfirm={performDeleteTicket}
+          title="Delete Job Ticket"
+          message="Are you sure you want to delete this job ticket? This action cannot be undone."
+        />
+      )}
     </>
   );
 };
-
-export default JobDetailView;

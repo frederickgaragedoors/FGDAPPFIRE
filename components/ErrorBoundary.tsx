@@ -1,4 +1,4 @@
-import React, { ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface Props {
   children?: ReactNode;
@@ -10,14 +10,16 @@ interface State {
   errorInfo: ErrorInfo | null;
 }
 
-class ErrorBoundary extends React.Component<Props, State> {
-  // FIX: Initialize state as a class property instead of in the constructor.
-  // This resolves TS errors where `this.state` was not being recognized.
-  state: State = {
-    hasError: false,
-    error: null,
-    errorInfo: null,
-  };
+class ErrorBoundary extends Component<Props, State> {
+  // FIX: Initialize state in the constructor for broader compatibility
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      hasError: false,
+      error: null,
+      errorInfo: null,
+    };
+  }
 
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error, errorInfo: null };

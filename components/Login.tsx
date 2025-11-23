@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { auth as authInstance, googleProvider } from '../firebase.ts';
+import { auth, googleProvider } from '../firebase.ts';
 import { signInWithPopup } from 'firebase/auth';
 import { UserCircleIcon, SettingsIcon, ShareIcon } from './icons.tsx';
 
@@ -31,11 +31,11 @@ const Login: React.FC<LoginProps> = ({ onGuestLogin }) => {
       setError(null);
       setUnauthorizedDomain(null);
       
-      if (!authInstance || !googleProvider) {
+      if (!auth || !googleProvider) {
         throw new Error("Firebase Auth not initialized.");
       }
       
-      await signInWithPopup(authInstance, googleProvider);
+      await signInWithPopup(auth, googleProvider);
     } catch (err: any) {
       console.error("Login failed", err);
       if (err.code === 'auth/unauthorized-domain') {

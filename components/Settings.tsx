@@ -1,17 +1,17 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { DefaultFieldSetting, BusinessInfo, JobTemplate, JobStatus, ALL_JOB_STATUSES, EmailSettings, CatalogItem, DEFAULT_ON_MY_WAY_TEMPLATE, MapSettings } from '../types.ts';
+import { DefaultFieldSetting, BusinessInfo, JobTemplate, JobStatus, ALL_JOB_STATUSES, EmailSettings, CatalogItem, DEFAULT_ON_MY_WAY_TEMPLATE, MapSettings, Theme } from '../types.ts';
 import { ArrowLeftIcon, TrashIcon, PlusIcon, DownloadIcon, UploadIcon, UserCircleIcon, EditIcon, CalendarIcon, ChevronDownIcon, MapPinIcon } from './icons.tsx';
 import { saveJsonFile, fileToDataUrl, generateICSContent, downloadICSFile, generateId } from '../utils.ts';
 import JobTemplateModal from './JobTemplateModal.tsx';
 import { useGoogleMaps } from '../hooks/useGoogleMaps.ts';
 import { useData } from '../contexts/DataContext.tsx';
-import { auth as authInstance } from '../firebase.ts';
+import { auth } from '../firebase.ts';
 import { signOut } from 'firebase/auth';
+import ConfirmationModal from './ConfirmationModal.tsx';
 
 // Declare google for TS
 declare const google: any;
-
-type Theme = 'light' | 'dark' | 'system';
 
 const SettingsSection = ({ title, subtitle, children, defaultOpen = false }: { title: string, subtitle?: string, children?: React.ReactNode, defaultOpen?: boolean }) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -60,6 +60,8 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
         onSwitchToCloud,
         loadDemoData,
         restoreBackup,
+        theme,
+        setTheme,
     } = useData();
     
     const [newFieldLabel, setNewFieldLabel] = useState('');
@@ -71,19 +73,15 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
     const [newCatalogItemName, setNewCatalogItemName] = useState('');
     const [newCatalogItemCost, setNewCatalogItemCost] = useState<number | ''>('');
     const [autoCalendarExportEnabled, setAutoCalendarExportEnabled] = useState<boolean>(false);
-    const [currentTheme, setCurrentTheme] = useState<'light' | 'dark' | 'system'>('system');
+    const [isRestoreConfirmOpen, setIsRestoreConfirmOpen] = useState(false);
+    const [restoreFileContent, setRestoreFileContent] = useState<string | null>(null);
 
     const homeAddressRef = useRef<HTMLInputElement>(null);
     const apiKey = currentMapSettings.apiKey || mapSettings.apiKey;
     const { isLoaded: isMapsLoaded } = useGoogleMaps(apiKey);
 
-    useEffect(() => {
-        const storedTheme = localStorage.getItem('theme') as Theme | null;
-        if (storedTheme) setCurrentTheme(storedTheme);
-    }, []);
-    
-    const updateTheme = (theme: Theme) => {
-        setCurrentTheme(theme);
+    const updateTheme = (newTheme: Theme) => {
+        setTheme(newTheme);
     };
 
     // Sync local state when props change
@@ -166,13 +164,24 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
         const file = e.target.files?.[0];
         if (file) {
             const reader = new FileReader();
-            reader.onload = async (event) => {
+            reader.onload = (event) => {
                 const content = event.target?.result as string;
-                await restoreBackup(content);
+                if (content) {
+                    setRestoreFileContent(content);
+                    setIsRestoreConfirmOpen(true);
+                }
             };
             reader.readAsText(file);
         }
-        if(e.target) e.target.value = '';
+        if (e.target) e.target.value = '';
+    };
+    
+    const handleConfirmRestore = async () => {
+        if (restoreFileContent) {
+            await restoreBackup(restoreFileContent);
+        }
+        setIsRestoreConfirmOpen(false);
+        setRestoreFileContent(null);
     };
 
     const handleSaveTemplate = (templateData: Omit<JobTemplate, 'id'> & { id?: string }) => {
@@ -222,8 +231,8 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
     };
     
     const handleSignOut = () => {
-        if (authInstance) {
-            signOut(authInstance).catch(error => console.error("Sign out error", error));
+        if (auth) {
+            signOut(auth).catch(error => console.error("Sign out error", error));
         }
     };
 
@@ -315,7 +324,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
                             <button
                                 key={themeOption}
                                 onClick={() => updateTheme(themeOption.toLowerCase() as Theme)}
-                                className={`flex-1 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${currentTheme === themeOption.toLowerCase() ? 'bg-white dark:bg-slate-800 text-sky-600 shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}
+                                className={`flex-1 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${theme === themeOption.toLowerCase() ? 'bg-white dark:bg-slate-800 text-sky-600 shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}
                             >
                                 {themeOption}
                             </button>
@@ -593,6 +602,20 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
                     template={editingTemplate}
                     onSave={handleSaveTemplate}
                     onClose={() => { setIsTemplateModalOpen(false); setEditingTemplate(null); }}
+                />
+            )}
+            {isRestoreConfirmOpen && (
+                <ConfirmationModal
+                    isOpen={isRestoreConfirmOpen}
+                    onClose={() => {
+                        setIsRestoreConfirmOpen(false);
+                        setRestoreFileContent(null);
+                    }}
+                    onConfirm={handleConfirmRestore}
+                    title="Restore Backup"
+                    message="Restoring a backup will overwrite all current data. This action cannot be undone. Are you sure you want to proceed?"
+                    confirmText="Restore"
+                    confirmButtonClass="bg-sky-600 hover:bg-sky-700"
                 />
             )}
         </div>

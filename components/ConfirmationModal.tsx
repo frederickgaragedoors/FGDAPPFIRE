@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { XIcon } from './icons.tsx';
 
@@ -7,9 +8,19 @@ interface ConfirmationModalProps {
   onConfirm: () => void;
   title: string;
   message: string;
+  confirmText?: string;
+  confirmButtonClass?: string;
 }
 
-const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, onConfirm, title, message }) => {
+const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  onConfirm, 
+  title, 
+  message,
+  confirmText = 'Delete',
+  confirmButtonClass = 'bg-red-600 hover:bg-red-700'
+}) => {
   if (!isOpen) return null;
 
   const handleConfirm = () => {
@@ -34,9 +45,9 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, 
           </button>
           <button
             onClick={handleConfirm}
-            className="px-4 py-2 rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700 transition-colors"
+            className={`px-4 py-2 rounded-md text-sm font-medium text-white transition-colors ${confirmButtonClass}`}
           >
-            Delete
+            {confirmText}
           </button>
         </div>
       </div>

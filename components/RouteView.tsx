@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { JobTicket } from '../types.ts';
 import { useData } from '../contexts/DataContext.tsx';
@@ -12,6 +14,8 @@ declare const google: any;
 interface RouteViewProps {
     onGoToSettings: () => void;
     onBack: () => void;
+    onViewJobDetail: (contactId: string, ticketId: string) => void;
+    initialDate?: string;
 }
 
 interface RouteMetrics {
@@ -22,15 +26,16 @@ interface RouteMetrics {
     delayMinutes: number;
 }
 
-const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack }) => {
+const getLocalDateString = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack, onViewJobDetail, initialDate }) => {
     const { contacts, mapSettings } = useData();
-    const [selectedDate, setSelectedDate] = useState(() => {
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const day = String(now.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    });
+    const [selectedDate, setSelectedDate] = useState(() => initialDate || getLocalDateString(new Date()));
     
     const [routeCalculationError, setRouteCalculationError] = useState<string | null>(null);
     const [leaveHomeTime, setLeaveHomeTime] = useState<Date | null>(null);
@@ -47,12 +52,13 @@ const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack }) => {
     const { isLoaded: mapLoaded, error: mapError } = useGoogleMaps(mapSettings?.apiKey);
 
     const dailyJobs = useMemo(() => {
-        const jobs: (JobTicket & { contactName: string; contactAddress: string })[] = [];
+        const jobs: (JobTicket & { contactName: string; contactAddress: string; contactId: string })[] = [];
         (contacts || []).forEach(contact => {
             (contact.jobTickets || []).forEach(ticket => {
                 if (ticket.date === selectedDate && ticket.status !== 'Declined') {
                     jobs.push({
                         ...ticket,
+                        contactId: contact.id,
                         contactName: contact.name,
                         contactAddress: contact.address
                     });
@@ -278,16 +284,31 @@ const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack }) => {
         );
     };
 
+    const todayStr = getLocalDateString(new Date());
+    const tomorrowDate = new Date();
+    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+    const tomorrowStr = getLocalDateString(tomorrowDate);
+
+    const buttonClass = (active: boolean) => 
+        `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+            active 
+            ? 'bg-sky-500 text-white shadow-sm' 
+            : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600'
+        }`;
 
     return (
         <div className="h-full flex flex-col bg-white dark:bg-slate-800">
-            <div className="p-4 flex items-center border-b border-slate-200 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-800 z-10">
-                <button onClick={onBack} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 md:hidden">
-                    <ArrowLeftIcon className="w-6 h-6 text-slate-600 dark:text-slate-300" />
-                </button>
-                <h2 className="ml-4 flex-grow font-bold text-lg text-slate-700 dark:text-slate-200">Route Planner</h2>
-                <div className="flex space-x-2">
-                    <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="border border-slate-300 dark:border-slate-600 rounded-md px-2 py-1 text-sm bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200" />
+            <div className="p-4 flex flex-wrap items-center justify-between gap-y-4 border-b border-slate-200 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-800 z-10">
+                <div className="flex items-center">
+                    <button onClick={onBack} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 md:hidden">
+                        <ArrowLeftIcon className="w-6 h-6 text-slate-600 dark:text-slate-300" />
+                    </button>
+                    <h2 className="ml-4 md:ml-0 font-bold text-lg text-slate-700 dark:text-slate-200">Route Planner</h2>
+                </div>
+                <div className="flex items-center space-x-2 w-full sm:w-auto">
+                    <button onClick={() => setSelectedDate(todayStr)} className={`${buttonClass(selectedDate === todayStr)} flex-1 sm:flex-auto`}>Today</button>
+                    <button onClick={() => setSelectedDate(tomorrowStr)} className={`${buttonClass(selectedDate === tomorrowStr)} flex-1 sm:flex-auto`}>Tomorrow</button>
+                    <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="border border-slate-300 dark:border-slate-600 rounded-md px-2 py-1.5 text-sm bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 flex-grow" />
                 </div>
             </div>
 
@@ -327,7 +348,13 @@ const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack }) => {
                                         {metrics && metrics.travelTimeText && (
                                             <div className="flex items-center ml-4 mb-2 text-xs text-slate-500 dark:text-slate-400"><div className="h-8 w-0.5 bg-slate-300 dark:bg-slate-600 mx-auto mr-2"></div><CarIcon className="w-3 h-3 mr-1" /><span>{metrics.travelTimeText} drive</span></div>
                                         )}
-                                        <div className="bg-white dark:bg-slate-800 p-3 rounded-md shadow-sm border border-slate-200 dark:border-slate-700 z-10 relative">
+                                        <div 
+                                            className="bg-white dark:bg-slate-800 p-3 rounded-md shadow-sm border border-slate-200 dark:border-slate-700 z-10 relative cursor-pointer hover:border-sky-500 dark:hover:border-sky-400 transition-colors"
+                                            onClick={() => onViewJobDetail(job.contactId, job.id)}
+                                            role="button"
+                                            tabIndex={0}
+                                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onViewJobDetail(job.contactId, job.id); }}}
+                                        >
                                             <div className="flex items-start justify-between">
                                                 <div>
                                                     <div className="flex items-center gap-2"><span className="font-medium text-slate-800 dark:text-slate-100">{job.contactName}</span>{metrics && metrics.status !== 'on_time' && <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${metrics.status === 'late' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'}`}>{metrics.status === 'late' ? `${metrics.delayMinutes}m Late` : `${metrics.delayMinutes}m Early`}</span>}</div>
