@@ -193,7 +193,11 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
         let finalPhotoUrl = contactData.photoUrl;
         let finalFiles = [...contactData.files];
 
+        // FIX: Ensure jobTickets is always an initialized array to prevent errors when adding the first job.
+        contactData.jobTickets = contactData.jobTickets || [];
+
         if (isGuestMode) {
+            // FIX: jobTickets property is now guaranteed to exist on newContact.
             const newContact = { ...contactData, id: contactId } as Contact;
             const updatedContacts = contactData.id
                 ? contacts.map(c => c.id === contactData.id ? newContact : c)
