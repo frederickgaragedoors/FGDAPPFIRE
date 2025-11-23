@@ -10,7 +10,7 @@ if (typeof window !== 'undefined' && (window as any).process === undefined) {
 }
 
 // UNCOMMENT THE SECTION BELOW TO ENABLE PWA (Offline Support)
-/*
+
 const updateSW = registerSW({
   onNeedRefresh() {
     if (confirm('New content available. Reload?')) {
@@ -18,7 +18,7 @@ const updateSW = registerSW({
     }
   },
 });
-*/
+
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
