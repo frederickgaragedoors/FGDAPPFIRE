@@ -81,7 +81,6 @@ export const generatePdf = async ({ contact, ticket, businessInfo, docType }: Ge
     };
 
     // --- Robust Header Generation ---
-    // 1. Load the image element and pre-calculate its dimensions
     const logoSource = businessInfo.logoDataUrl || businessInfo.logoUrl;
     const loadedLogo = logoSource ? await loadImageElement(logoSource) : null;
     let logoDims = { width: 0, height: 0 };
@@ -97,23 +96,25 @@ export const generatePdf = async ({ contact, ticket, businessInfo, docType }: Ge
     
     const infoBlockWidth = pageWidth - margin * 2 - logoDims.width - 150;
     const businessInfoText = `${businessInfo.name || 'Your Company'}\n${businessInfo.address || ''}\n${businessInfo.phone || ''}\n${businessInfo.email || ''}`;
-    const businessInfoHeight = doc.getTextDimensions(businessInfoText, { maxWidth: infoBlockWidth, fontSize: 10 }).h + 20;
+    doc.setFontSize(10);
+    const businessInfoHeight = doc.getTextDimensions(businessInfoText, { maxWidth: infoBlockWidth }).h + 20;
 
-    const docInfoHeight = 60; // Approximate height for title + job info
+    doc.setFontSize(24);
+    doc.setFont('helvetica', 'bold');
+    const titleLines = doc.splitTextToSize(displayTitle, 150);
+    const titleHeight = doc.getTextDimensions(titleLines).h;
+    const docInfoHeight = titleHeight + 35; 
+
     const maxHeaderHeight = Math.max(logoDims.height, businessInfoHeight, docInfoHeight);
 
-    // 2. Draw header elements using calculated max height
     if (loadedLogo) {
         try {
-            // By passing the loaded HTMLImageElement directly, we bypass jsPDF's unreliable internal
-            // data URL parser, which was the likely source of the environment-specific bug.
             doc.addImage(loadedLogo, 'PNG', margin, yPos, logoDims.width, logoDims.height);
         } catch (e) {
             console.error("jsPDF failed to add the pre-loaded image element:", e);
         }
     }
     
-    // Centered business info
     const centerX = pageWidth / 2;
     let currentInfoY = yPos + 10;
     doc.setFontSize(18);
@@ -139,8 +140,9 @@ export const generatePdf = async ({ contact, ticket, businessInfo, docType }: Ge
     doc.setFontSize(24);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(50);
-    doc.text(displayTitle, rightColX, docInfoY, { align: 'right' });
-    docInfoY += 25;
+    doc.text(titleLines, rightColX, docInfoY, { align: 'right' });
+    docInfoY += titleHeight + 5;
+    
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100);
