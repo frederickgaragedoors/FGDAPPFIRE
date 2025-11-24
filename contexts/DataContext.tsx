@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import { FirebaseUser as User, auth, db, storage } from '../firebase.ts';
 import { collection, doc, onSnapshot, setDoc, deleteDoc, updateDoc, QuerySnapshot, DocumentData, DocumentSnapshot } from 'firebase/firestore';
@@ -348,8 +347,9 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
              }
         }
         
+        const updatedContact = { ...contact, jobTickets: updatedTickets };
+
         if (isGuestMode) {
-            const updatedContact = { ...contact, jobTickets: updatedTickets };
             const updatedContacts = contacts.map(c => c.id === contactId ? updatedContact : c);
             await idb.saveContacts(updatedContacts);
             setContacts(updatedContacts);
@@ -360,9 +360,9 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
         const contactRef = doc(db, 'users', user.uid, 'contacts', contactId);
         
         try {
-            await updateDoc(contactRef, {
-                jobTickets: updatedTickets
-            });
+            // Use setDoc to overwrite the entire document. This is more robust for PWA offline mode,
+            // especially on mobile, as it avoids complex array merging logic that can fail with `updateDoc`.
+            await setDoc(contactRef, updatedContact);
         } catch (error) {
             console.error("Failed to update job tickets in cloud:", error);
             alert(`Failed to save job. Error: ${error instanceof Error ? error.message : String(error)}`);
