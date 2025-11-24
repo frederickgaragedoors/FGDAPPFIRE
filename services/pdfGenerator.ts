@@ -1,4 +1,3 @@
-
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Contact, JobTicket, BusinessInfo } from '../types.ts';
@@ -14,15 +13,15 @@ interface GeneratePdfParams {
 }
 
 const getImageDimensions = (src: string): Promise<{ width: number; height: number } | null> => {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         if (!src || !src.startsWith('data:image')) {
             return resolve(null);
         }
         const img = new Image();
         img.onload = () => resolve({ width: img.width, height: img.height });
         img.onerror = () => {
-            console.warn("Failed to load image for PDF generation.");
-            resolve(null);
+             // Rejecting allows the caller to catch the error, log it, and continue.
+            reject("Image load failed for PDF generation.");
         };
         img.src = src;
     });
@@ -73,7 +72,10 @@ export const generatePdf = async ({ contact, ticket, businessInfo, docType }: Ge
     // 1. Pre-calculate dimensions of all header elements
     let logoDims = { width: 0, height: 0 };
     if (businessInfo.logoUrl) {
-        const dims = await getImageDimensions(businessInfo.logoUrl);
+        const dims = await getImageDimensions(businessInfo.logoUrl).catch(err => {
+            console.error("Continuing PDF generation without logo:", err);
+            return null; // Gracefully handle logo load failure
+        });
         if (dims) {
             const aspectRatio = dims.width / dims.height;
             logoDims.height = 60;
