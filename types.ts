@@ -136,7 +136,8 @@ export interface BusinessInfo {
   address: string;
   phone: string;
   email: string;
-  logoUrl: string; // Base64 data URL
+  logoUrl: string; // Base64 data URL (guest) or HTTPS URL (cloud)
+  logoDataUrl?: string; // Always a Base64 data URL, for PDF generation in cloud mode
   onMyWayTemplate?: string;
   defaultSalesTaxRate?: number;
   defaultProcessingFeeRate?: number;
