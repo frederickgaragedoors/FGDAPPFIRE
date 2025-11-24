@@ -173,14 +173,16 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (notes.trim() || parts.length > 0) {
-      // Re-construct the object here to be absolutely certain we have the latest state.
-      // This is a more robust pattern that avoids relying on memoized state,
-      // and ensures optional fields are cleanly omitted if empty.
+      const now = new Date();
+      const currentHours = String(now.getHours()).padStart(2, '0');
+      const currentMinutes = String(now.getMinutes()).padStart(2, '0');
+      const currentTime = `${currentHours}:${currentMinutes}`;
+      
       const ticketToSave = {
           id: entry?.id,
           date,
-          time: time || undefined,
-          duration: duration !== '' && duration !== null ? Number(duration) : undefined,
+          time: time || currentTime,
+          duration: (duration !== '' && duration !== null) ? Number(duration) : 60,
           jobLocation,
           jobLocationContactName,
           jobLocationContactPhone,
