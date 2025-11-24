@@ -12,16 +12,16 @@ interface GeneratePdfParams {
     docType: DocType;
 }
 
-const getImageDimensions = (src: string): Promise<{ width: number; height: number } | null> => {
-    return new Promise((resolve, reject) => {
+const loadImageElement = (src: string): Promise<HTMLImageElement | null> => {
+    return new Promise((resolve) => {
         if (!src || !src.startsWith('data:image')) {
             return resolve(null);
         }
         const img = new Image();
-        img.onload = () => resolve({ width: img.width, height: img.height });
+        img.onload = () => resolve(img);
         img.onerror = () => {
-             // Rejecting allows the caller to catch the error, log it, and continue.
-            reject("Image load failed for PDF generation.");
+            console.error("PDF Generator: Failed to load image element from data URL. The URL might be malformed or the image data corrupted.");
+            resolve(null); // Resolve null to allow PDF generation to continue without the image.
         };
         img.src = src;
     });
@@ -37,7 +37,7 @@ export const generatePdf = async ({ contact, ticket, businessInfo, docType }: Ge
     // --- Calculations & Constants ---
     const { subtotal, taxAmount, feeAmount, totalCost, deposit, balanceDue } = calculateJobTicketTotal(ticket);
     const cashTotal = subtotal + taxAmount;
-    const cardTotal = totalCost;
+    const cardTotal = totalCost; 
     const depositRatio = totalCost > 0 ? deposit / totalCost : 0;
     const cashDeposit = cashTotal * depositRatio;
     const cashBalance = cashTotal - cashDeposit;
@@ -69,24 +69,19 @@ export const generatePdf = async ({ contact, ticket, businessInfo, docType }: Ge
     };
 
     // --- Robust Header Generation ---
-    // 1. Pre-calculate dimensions of all header elements
+    // 1. Load the image element and pre-calculate its dimensions
+    const loadedLogo = businessInfo.logoUrl ? await loadImageElement(businessInfo.logoUrl) : null;
     let logoDims = { width: 0, height: 0 };
-    if (businessInfo.logoUrl) {
-        const dims = await getImageDimensions(businessInfo.logoUrl).catch(err => {
-            console.error("Continuing PDF generation without logo:", err);
-            return null; // Gracefully handle logo load failure
-        });
-        if (dims) {
-            const aspectRatio = dims.width / dims.height;
-            logoDims.height = 60;
-            logoDims.width = logoDims.height * aspectRatio;
-            if (logoDims.width > 150) {
-                logoDims.width = 150;
-                logoDims.height = logoDims.width / aspectRatio;
-            }
+    if (loadedLogo) {
+        const aspectRatio = loadedLogo.width / loadedLogo.height;
+        logoDims.height = 60;
+        logoDims.width = logoDims.height * aspectRatio;
+        if (logoDims.width > 150) {
+            logoDims.width = 150;
+            logoDims.height = logoDims.width / aspectRatio;
         }
     }
-
+    
     const infoBlockWidth = pageWidth - margin * 2 - logoDims.width - 150;
     const businessInfoText = `${businessInfo.name || 'Your Company'}\n${businessInfo.address || ''}\n${businessInfo.phone || ''}\n${businessInfo.email || ''}`;
     const businessInfoHeight = doc.getTextDimensions(businessInfoText, { maxWidth: infoBlockWidth, fontSize: 10 }).h + 20;
@@ -95,18 +90,14 @@ export const generatePdf = async ({ contact, ticket, businessInfo, docType }: Ge
     const maxHeaderHeight = Math.max(logoDims.height, businessInfoHeight, docInfoHeight);
 
     // 2. Draw header elements using calculated max height
-    if (businessInfo.logoUrl && logoDims.width > 0) {
+    if (loadedLogo) {
         try {
-            // Robustly determine the image format from the data URL.
-            // Previous attempts to auto-detect or crudely parse this failed in PWA/Electron environments.
-            // This regex-based approach is much more reliable.
-            const matches = businessInfo.logoUrl.match(/^data:image\/(\w+);/);
-            const imageFormat = matches && matches[1] ? matches[1].toUpperCase() : 'PNG'; // Default to PNG if format is somehow missing
-
-            doc.addImage(businessInfo.logoUrl, imageFormat, margin, yPos, logoDims.width, logoDims.height);
+            // By passing the loaded HTMLImageElement directly, we bypass jsPDF's unreliable internal
+            // data URL parser, which was the likely source of the environment-specific bug.
+            // The format string ('PNG') is ignored by jsPDF when an element is passed.
+            doc.addImage(loadedLogo, 'PNG', margin, yPos, logoDims.width, logoDims.height);
         } catch (e) {
-            console.error("Failed to add logo to PDF, even with robust parsing. Logo URL:", businessInfo.logoUrl, "Error:", e);
-            // Continue PDF generation without the logo if it fails.
+            console.error("jsPDF failed to add the pre-loaded image element:", e);
         }
     }
     
