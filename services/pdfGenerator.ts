@@ -96,9 +96,18 @@ export const generatePdf = async ({ contact, ticket, businessInfo, docType }: Ge
 
     // 2. Draw header elements using calculated max height
     if (businessInfo.logoUrl && logoDims.width > 0) {
-        // Pass the full data URL and let jsPDF auto-detect the format.
-        // This is more robust than manual parsing.
-        doc.addImage(businessInfo.logoUrl, margin, yPos, logoDims.width, logoDims.height);
+        try {
+            // Robustly determine the image format from the data URL.
+            // Previous attempts to auto-detect or crudely parse this failed in PWA/Electron environments.
+            // This regex-based approach is much more reliable.
+            const matches = businessInfo.logoUrl.match(/^data:image\/(\w+);/);
+            const imageFormat = matches && matches[1] ? matches[1].toUpperCase() : 'PNG'; // Default to PNG if format is somehow missing
+
+            doc.addImage(businessInfo.logoUrl, imageFormat, margin, yPos, logoDims.width, logoDims.height);
+        } catch (e) {
+            console.error("Failed to add logo to PDF, even with robust parsing. Logo URL:", businessInfo.logoUrl, "Error:", e);
+            // Continue PDF generation without the logo if it fails.
+        }
     }
     
     const infoX = margin + logoDims.width + (logoDims.width > 0 ? 20 : 0);
