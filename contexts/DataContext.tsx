@@ -380,11 +380,14 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
         if (!user || !db || !storage) return;
         try {
             if (updates.businessInfo && updates.businessInfo.logoUrl && updates.businessInfo.logoUrl.startsWith('data:')) {
+                const dataUrl = updates.businessInfo.logoUrl;
+                updates.businessInfo.logoDataUrl = dataUrl; // Keep data URL for PDF generation
+
                 const logoRef = ref(storage, `users/${user.uid}/settings/logo_${Date.now()}`);
-                const res = await fetch(updates.businessInfo.logoUrl);
+                const res = await fetch(dataUrl);
                 const blob = await res.blob();
                 await uploadBytes(logoRef, blob);
-                updates.businessInfo.logoUrl = await getDownloadURL(logoRef);
+                updates.businessInfo.logoUrl = await getDownloadURL(logoRef); // Overwrite with cloud URL for display
             }
             const settingsRef = doc(db, 'users', user.uid, 'settings', 'general');
             await setDoc(settingsRef, updates, { merge: true });
