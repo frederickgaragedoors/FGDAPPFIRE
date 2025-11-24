@@ -211,36 +211,100 @@ export const generatePdf = async ({ contact, ticket, businessInfo, docType }: Ge
     yPos = (doc as any).lastAutoTable.finalY + 30;
 
     // --- Totals Section ---
-    yPos = checkAndAddPage(yPos, docType === 'estimate' && ticket.processingFeeRate > 0 ? 200 : 150);
-    if (docType === 'estimate' && ticket.processingFeeRate > 0) {
-        // Dual Column Estimate Layout logic here...
-    } else {
+    yPos = checkAndAddPage(yPos, 150);
+    if (docType === 'estimate' && (ticket.processingFeeRate || 0) > 0) {
+        // Renders the two-column payment options for estimates with card fees
+        yPos = checkAndAddPage(yPos, 200);
         const rAlign = pageWidth - margin;
-        const lAlign = rAlign - 150;
+        let lAlign = rAlign - 150;
+
         doc.setFontSize(10);
         doc.setTextColor(50);
         doc.text("Subtotal:", lAlign, yPos);
         doc.text(`$${subtotal.toFixed(2)}`, rAlign, yPos, { align: 'right' });
         yPos += 15;
-        if (ticket.salesTaxRate > 0) {
+
+        if (taxAmount > 0) {
             doc.text(`Sales Tax (${ticket.salesTaxRate}%):`, lAlign, yPos);
             doc.text(`$${taxAmount.toFixed(2)}`, rAlign, yPos, { align: 'right' });
             yPos += 15;
         }
-        if (ticket.processingFeeRate > 0) {
-            doc.text(`Processing Fee (${ticket.processingFeeRate}%):`, lAlign, yPos);
-            doc.text(`$${feeAmount.toFixed(2)}`, rAlign, yPos, { align: 'right' });
-            yPos += 15;
-        }
-        yPos += 5;
-        doc.setDrawColor(200);
-        doc.line(lAlign - 10, yPos - 10, rAlign, yPos - 10);
-        doc.setFontSize(12);
+        yPos += 10;
+        doc.setDrawColor(220);
+        doc.line(margin, yPos, pageWidth - margin, yPos);
+        yPos += 20;
+
+        doc.setFontSize(14);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0);
-        doc.text("Total:", lAlign, yPos);
-        doc.text(`$${totalCost.toFixed(2)}`, rAlign, yPos, { align: 'right' });
-        yPos += 20;
+        doc.text("PAYMENT OPTIONS", pageWidth / 2, yPos, { align: 'center' });
+        yPos += 25;
+
+        const colWidth = (pageWidth - margin * 2 - 20) / 2;
+        const col1X = margin;
+        const col2X = margin + colWidth + 20;
+        let startY = yPos;
+        let endY = startY;
+
+        let cashBoxHeight = 60;
+        if(deposit > 0) cashBoxHeight += 30;
+
+        doc.setFillColor(248, 250, 252); 
+        doc.roundedRect(col1X, startY - 15, colWidth, cashBoxHeight, 5, 5, 'F');
+        doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor(50);
+        doc.text("Cash / Check", col1X + colWidth / 2, startY, { align: 'center' });
+        doc.setDrawColor(220); doc.line(col1X + 10, startY + 10, col1X + colWidth - 10, startY + 10);
+        
+        let cashY = startY + 30;
+        doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+        if (deposit > 0) {
+            doc.text("Required Deposit:", col1X + 10, cashY); doc.text(`$${cashDeposit.toFixed(2)}`, col1X + colWidth - 10, cashY, { align: 'right' }); cashY += 15;
+            doc.text("Balance Due:", col1X + 10, cashY); doc.text(`$${cashBalance.toFixed(2)}`, col1X + colWidth - 10, cashY, { align: 'right' }); cashY += 15;
+        }
+        doc.line(col1X + 10, cashY, col1X + colWidth - 10, cashY); cashY += 15;
+        doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+        doc.text("Total", col1X + 10, cashY); doc.text(`$${cashTotal.toFixed(2)}`, col1X + colWidth - 10, cashY, { align: 'right' });
+        endY = Math.max(endY, cashY);
+
+        let cardBoxHeight = 80;
+        if(deposit > 0) cardBoxHeight += 30;
+
+        doc.setFillColor(240, 249, 255);
+        doc.roundedRect(col2X, startY - 15, colWidth, cardBoxHeight, 5, 5, 'F');
+        doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor(50);
+        doc.text("Card Payment", col2X + colWidth / 2, startY, { align: 'center' });
+        doc.line(col2X + 10, startY + 10, col2X + colWidth - 10, startY + 10);
+        
+        let cardY = startY + 30;
+        doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+        doc.text(`Processing Fee (${ticket.processingFeeRate}%):`, col2X + 10, cardY); doc.text(`$${feeAmount.toFixed(2)}`, col2X + colWidth - 10, cardY, { align: 'right' }); cardY += 20;
+        if (deposit > 0) {
+            doc.text("Required Deposit:", col2X + 10, cardY); doc.text(`$${cardDeposit.toFixed(2)}`, col2X + colWidth - 10, cardY, { align: 'right' }); cardY += 15;
+            doc.text("Balance Due:", col2X + 10, cardY); doc.text(`$${cardBalance.toFixed(2)}`, col2X + colWidth - 10, cardY, { align: 'right' }); cardY += 15;
+        }
+        doc.line(col2X + 10, cardY, col2X + colWidth - 10, cardY); cardY += 15;
+        doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+        doc.text("Total", col2X + 10, cardY); doc.text(`$${cardTotal.toFixed(2)}`, col2X + colWidth - 10, cardY, { align: 'right' });
+        endY = Math.max(endY, cardY);
+
+        yPos = endY + 20;
+    } else {
+        // Standard single-column layout for Receipts and simple Estimates
+        const rAlign = pageWidth - margin;
+        const lAlign = rAlign - 150;
+        doc.setFontSize(10);
+        doc.setTextColor(50);
+        doc.text("Subtotal:", lAlign, yPos); doc.text(`$${subtotal.toFixed(2)}`, rAlign, yPos, { align: 'right' }); yPos += 15;
+        if (taxAmount > 0) {
+            doc.text(`Sales Tax (${ticket.salesTaxRate}%):`, lAlign, yPos); doc.text(`$${taxAmount.toFixed(2)}`, rAlign, yPos, { align: 'right' }); yPos += 15;
+        }
+        if (feeAmount > 0) {
+            doc.text(`Processing Fee (${ticket.processingFeeRate}%):`, lAlign, yPos); doc.text(`$${feeAmount.toFixed(2)}`, rAlign, yPos, { align: 'right' }); yPos += 15;
+        }
+        yPos += 5;
+        doc.setDrawColor(200); doc.line(lAlign - 10, yPos - 10, rAlign, yPos - 10);
+        doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor(0);
+        doc.text("Total:", lAlign, yPos); doc.text(`$${totalCost.toFixed(2)}`, rAlign, yPos, { align: 'right' }); yPos += 20;
         
         if (docType === 'receipt') {
             if (paymentStatus === 'paid_in_full') {
@@ -257,12 +321,12 @@ export const generatePdf = async ({ contact, ticket, businessInfo, docType }: Ge
                 doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor(0);
                 doc.text("Balance Due:", lAlign, yPos); doc.text(`$${balanceDue.toFixed(2)}`, rAlign, yPos, { align: 'right' });
                 yPos += 20;
-            } else {
+            } else { // Unpaid receipt
                 doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor(0);
                 doc.text("Balance Due:", lAlign, yPos); doc.text(`$${totalCost.toFixed(2)}`, rAlign, yPos, { align: 'right' });
                 yPos += 20;
             }
-        } else if (deposit > 0) { // Estimate with deposit
+        } else if (deposit > 0) { // Estimate with deposit but no card fee
             doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(50);
             doc.text("Required Deposit:", lAlign, yPos); doc.text(`$${deposit.toFixed(2)}`, rAlign, yPos, { align: 'right' });
             yPos += 15;
