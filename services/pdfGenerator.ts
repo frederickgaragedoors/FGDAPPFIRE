@@ -82,7 +82,8 @@ export const generatePdf = async ({ contact, ticket, businessInfo, docType }: Ge
 
     // --- Robust Header Generation ---
     // 1. Load the image element and pre-calculate its dimensions
-    const loadedLogo = businessInfo.logoUrl ? await loadImageElement(businessInfo.logoUrl) : null;
+    const logoSource = businessInfo.logoDataUrl || businessInfo.logoUrl;
+    const loadedLogo = logoSource ? await loadImageElement(logoSource) : null;
     let logoDims = { width: 0, height: 0 };
     if (loadedLogo) {
         const aspectRatio = loadedLogo.width / loadedLogo.height;
