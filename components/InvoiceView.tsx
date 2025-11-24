@@ -86,37 +86,23 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
             if (result) {
                 const pdfBlob = result.pdf.output('blob');
                 const pdfUrl = URL.createObjectURL(pdfBlob);
+
+                // Open the generated PDF in a new tab. This serves as a reliable print preview.
+                // The user can then use the browser's/PDF viewer's print functionality,
+                // which will show a proper preview in the system print dialog.
+                const printWindow = window.open(pdfUrl, '_blank');
+                if (!printWindow) {
+                    alert("Pop-up blocked. Please allow pop-ups for this site to view the print preview.");
+                }
                 
-                const iframe = document.createElement('iframe');
-                iframe.style.position = 'fixed';
-                iframe.style.width = '0';
-                iframe.style.height = '0';
-                iframe.style.border = 'none';
-                iframe.src = pdfUrl;
-                document.body.appendChild(iframe);
-                
-                iframe.onload = () => {
-                    setTimeout(() => {
-                        try {
-                           iframe.contentWindow?.focus();
-                           iframe.contentWindow?.print();
-                        } catch (e) {
-                           console.error("Printing failed:", e);
-                           alert("Printing failed. Please try downloading the PDF instead.");
-                        } finally {
-                           URL.revokeObjectURL(pdfUrl);
-                           document.body.removeChild(iframe);
-                           setIsSaving(false);
-                        }
-                    }, 100);
-                };
+                // The browser will handle revoking the object URL when the tab is closed.
             } else {
-                 setIsSaving(false);
                  alert("Could not generate PDF for printing.");
             }
         } catch (error) {
             console.error("Failed to generate PDF for printing:", error);
             alert("Could not generate PDF for printing.");
+        } finally {
             setIsSaving(false);
         }
     };
