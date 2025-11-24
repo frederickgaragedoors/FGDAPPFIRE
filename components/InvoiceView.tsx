@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { Contact, JobTicket, FileAttachment, ViewState } from '../types.ts';
 import { useData } from '../contexts/DataContext.tsx';
@@ -66,25 +65,74 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
     const handleDownload = async () => {
         if (isSaving) return;
         setIsSaving(true);
-        const result = await generatePdf({ contact, ticket, businessInfo, docType });
-        if (result) {
-            result.pdf.save(result.fileName);
+        try {
+            const result = await generatePdf({ contact, ticket, businessInfo, docType });
+            if (result) {
+                result.pdf.save(result.fileName);
+            }
+        } catch (error) {
+            console.error("Failed to download PDF:", error);
+            alert("Could not generate PDF for download.");
+        } finally {
+            setIsSaving(false);
         }
-        setIsSaving(false);
+    };
+
+    const handlePrint = async () => {
+        if (isSaving) return;
+        setIsSaving(true);
+        try {
+            const result = await generatePdf({ contact, ticket, businessInfo, docType });
+            if (result) {
+                const pdfBlob = result.pdf.output('blob');
+                const pdfUrl = URL.createObjectURL(pdfBlob);
+                
+                const iframe = document.createElement('iframe');
+                iframe.style.position = 'fixed';
+                iframe.style.width = '0';
+                iframe.style.height = '0';
+                iframe.style.border = 'none';
+                iframe.src = pdfUrl;
+                document.body.appendChild(iframe);
+                
+                iframe.onload = () => {
+                    setTimeout(() => {
+                        try {
+                           iframe.contentWindow?.focus();
+                           iframe.contentWindow?.print();
+                        } catch (e) {
+                           console.error("Printing failed:", e);
+                           alert("Printing failed. Please try downloading the PDF instead.");
+                        } finally {
+                           URL.revokeObjectURL(pdfUrl);
+                           document.body.removeChild(iframe);
+                           setIsSaving(false);
+                        }
+                    }, 100);
+                };
+            } else {
+                 setIsSaving(false);
+                 alert("Could not generate PDF for printing.");
+            }
+        } catch (error) {
+            console.error("Failed to generate PDF for printing:", error);
+            alert("Could not generate PDF for printing.");
+            setIsSaving(false);
+        }
     };
 
     const handleAttach = async () => {
         if (isSaving) return;
         setIsSaving(true);
-        const result = await generatePdf({ contact, ticket, businessInfo, docType });
-        if (result) {
-            const { pdf, fileName } = result;
-            const pdfBlob = pdf.output('blob');
-            const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
-            
-            try {
-                 const dataUrl = await fileToDataUrl(pdfFile);
-                 const newFileAttachment: FileAttachment = {
+        try {
+            const result = await generatePdf({ contact, ticket, businessInfo, docType });
+            if (result) {
+                const { pdf, fileName } = result;
+                const pdfBlob = pdf.output('blob');
+                const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+                
+                const dataUrl = await fileToDataUrl(pdfFile);
+                const newFileAttachment: FileAttachment = {
                     id: generateId(),
                     name: fileName,
                     type: 'application/pdf',
@@ -94,12 +142,13 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
                 const newFileObjects: { [id: string]: File } = { [newFileAttachment.id]: pdfFile };
                 await handleAddFilesToContact(contact.id, [newFileAttachment], newFileObjects);
                 alert('PDF attached successfully!');
-            } catch (error) {
-                console.error("Error attaching PDF:", error);
-                alert("Failed to attach PDF.");
             }
+        } catch (error) {
+            console.error("Error attaching PDF:", error);
+            alert("Failed to attach PDF.");
+        } finally {
+            setIsSaving(false);
         }
-        setIsSaving(false);
     };
     
     const handleEmail = async () => {
@@ -118,18 +167,24 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
         const subject = processTemplate(template.subject, templateData);
         const body = processTemplate(template.body, templateData);
         
-        const result = await generatePdf({ contact, ticket, businessInfo, docType });
-        
-        if (result) {
-            result.pdf.save(result.fileName);
+        try {
+            const result = await generatePdf({ contact, ticket, businessInfo, docType });
+            
+            if (result) {
+                result.pdf.save(result.fileName);
 
-            setTimeout(() => {
-                const mailtoLink = `mailto:${contact.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-                window.location.href = mailtoLink;
-                alert("PDF downloaded. Opening email client... Please attach the PDF file to your email.");
-            }, 500);
+                setTimeout(() => {
+                    const mailtoLink = `mailto:${contact.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                    window.location.href = mailtoLink;
+                    alert("PDF downloaded. Opening email client... Please attach the PDF file to your email.");
+                }, 500);
+            }
+        } catch (error) {
+            console.error("Failed to process email action:", error);
+            alert("Could not process email action.");
+        } finally {
+            setIsSaving(false);
         }
-        setIsSaving(false);
     };
 
     const handleNativeShare = async () => {
@@ -175,34 +230,7 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
     };
 
     return (
-        <div className="h-full flex flex-col bg-slate-200 dark:bg-slate-900 overflow-y-auto print:bg-white print:overflow-visible print:h-auto">
-            <style>{`
-                @media print {
-                    body * {
-                        visibility: hidden;
-                    }
-                    #printable-invoice, #printable-invoice * {
-                        visibility: visible;
-                    }
-                    #printable-invoice {
-                        position: absolute;
-                        left: 0;
-                        top: 0;
-                        width: 100%;
-                        margin: 0 !important;
-                        padding: 20mm !important;
-                        box-shadow: none !important;
-                    }
-                    @page {
-                        size: auto;
-                        margin: 0mm;
-                    }
-                    html, body, #root {
-                        height: auto !important;
-                        overflow: visible !important;
-                    }
-                }
-            `}</style>
+        <div className="h-full flex flex-col bg-slate-200 dark:bg-slate-900 overflow-y-auto">
             {/* Toolbar */}
             <div className="p-4 border-b border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 print:hidden">
                 <div className="flex flex-col lg:flex-row items-center lg:justify-between gap-4 lg:gap-0">
@@ -249,10 +277,11 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
                             </button>
                         )}
                         <button 
-                            onClick={() => window.print()}
-                            className="px-4 py-2 rounded-md text-sm font-medium text-slate-600 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600"
+                            onClick={handlePrint}
+                            disabled={isSaving}
+                            className="px-4 py-2 rounded-md text-sm font-medium text-slate-600 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-wait"
                         >
-                            Print
+                             {isSaving ? '...' : 'Print'}
                         </button>
                         <button 
                             onClick={handleDownload}
@@ -273,8 +302,8 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
             </div>
 
             {/* Invoice Paper */}
-            <div className="p-4 md:p-8 flex-grow print:p-0">
-                <div id="printable-invoice" ref={invoiceContentRef} className="max-w-4xl mx-auto bg-white p-8 md:p-12 shadow-lg print:shadow-none invoice-paper">
+            <div className="p-4 md:p-8 flex-grow">
+                <div id="printable-invoice" ref={invoiceContentRef} className="max-w-4xl mx-auto bg-white p-8 md:p-12 shadow-lg invoice-paper">
                     <header className="flex flex-col md:flex-row justify-between items-start pb-6 border-b border-slate-200 text-slate-800">
                          {/* Left: Logo (First in visual order for mobile usually, but here we use order classes) */}
                         <div className="w-full md:w-1/3 flex justify-center md:justify-start order-1">
