@@ -14,15 +14,27 @@ interface GeneratePdfParams {
 
 const loadImageElement = (src: string): Promise<HTMLImageElement | null> => {
     return new Promise((resolve) => {
-        if (!src || !src.startsWith('data:image')) {
+        if (!src) {
             return resolve(null);
         }
+        
         const img = new Image();
+
+        // **THIS IS THE FIX**: Set crossOrigin for cloud-hosted (http) images.
+        // This is required to prevent a "tainted canvas" security error when jsPDF
+        // tries to read the image data from a different origin (like Firebase Storage).
+        // This error often fails silently, causing the image to disappear.
+        if (src.startsWith('http')) {
+            img.crossOrigin = "anonymous";
+        }
+
         img.onload = () => resolve(img);
-        img.onerror = () => {
-            console.error("PDF Generator: Failed to load image element from data URL. The URL might be malformed or the image data corrupted.");
+
+        img.onerror = (err) => {
+            console.error("PDF Generator: Failed to load image element from URL. The image may be corrupt or the URL incorrect.", src, err);
             resolve(null); // Resolve null to allow PDF generation to continue without the image.
         };
+
         img.src = src;
     });
 };
@@ -94,7 +106,6 @@ export const generatePdf = async ({ contact, ticket, businessInfo, docType }: Ge
         try {
             // By passing the loaded HTMLImageElement directly, we bypass jsPDF's unreliable internal
             // data URL parser, which was the likely source of the environment-specific bug.
-            // The format string ('PNG') is ignored by jsPDF when an element is passed.
             doc.addImage(loadedLogo, 'PNG', margin, yPos, logoDims.width, logoDims.height);
         } catch (e) {
             console.error("jsPDF failed to add the pre-loaded image element:", e);
