@@ -80,22 +80,26 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
 
     const handlePrint = async () => {
         if (isSaving) return;
+
+        const isMobileDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+        // On mobile, delegate to the Web Share API which is the idiomatic way to print/save files.
+        if (isMobileDevice && isNativeShareSupported) {
+            await handleNativeShare();
+            return;
+        }
+
+        // Desktop logic: generate PDF and open in a new tab for previewing and printing.
         setIsSaving(true);
         try {
             const result = await generatePdf({ contact, ticket, businessInfo, docType });
             if (result) {
                 const pdfBlob = result.pdf.output('blob');
                 const pdfUrl = URL.createObjectURL(pdfBlob);
-
-                // Open the generated PDF in a new tab. This serves as a reliable print preview.
-                // The user can then use the browser's/PDF viewer's print functionality,
-                // which will show a proper preview in the system print dialog.
                 const printWindow = window.open(pdfUrl, '_blank');
                 if (!printWindow) {
                     alert("Pop-up blocked. Please allow pop-ups for this site to view the print preview.");
                 }
-                
-                // The browser will handle revoking the object URL when the tab is closed.
             } else {
                  alert("Could not generate PDF for printing.");
             }
