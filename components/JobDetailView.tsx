@@ -168,102 +168,103 @@ export const JobDetailView: React.FC<JobDetailViewProps> = ({
               <div className="col-span-1 flex flex-col">
                   <div className={`flex-1 p-4 flex flex-col justify-center items-center text-center ${statusColor.base}`}>
                       <span className={`text-xs uppercase ${statusColor.text} opacity-75`}>Job Status</span>
-                      <p className={`font-bold text-base ${statusColor.text} truncate`}>
+                      <p className={`font-bold text-base ${statusColor.text} break-words`}>
                           {ticket.status}
                       </p>
                   </div>
                   <div className={`flex-1 p-4 flex flex-col justify-center items-center text-center ${paymentStatusColor.base}`}>
                       <span className={`text-xs uppercase ${paymentStatusColor.text} opacity-75`}>Payment</span>
-                      <p className={`font-bold text-base ${paymentStatusColor.text} truncate`}>
+                      <p className={`font-bold text-base ${paymentStatusColor.text} break-words`}>
                           {paymentStatusLabel}
                       </p>
                   </div>
               </div>
             </div>
           </div>
-
-
-          {/* Main Info Card */}
+          
+          {/* Client & Site Info Card */}
           <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
-              <div className="p-5">
-                  <div className="border-b border-slate-200 dark:border-slate-700 -mx-5 px-5 pb-5">
-                      <span className="text-xs font-bold text-slate-400 uppercase mb-1 block">Work Notes</span>
-                      <p className="text-slate-800 dark:text-slate-200 text-base whitespace-pre-wrap break-words">
-                          {ticket.notes || 'No notes provided for this job.'}
+              <div className="p-5 space-y-5">
+                  {/* Client / Billing Block */}
+                  <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-400 uppercase mb-2 flex items-center">
+                          <UserCircleIcon className="w-3 h-3 mr-1 flex-shrink-0" /> Client / Billing
                       </p>
+                      <div className="flex flex-col">
+                          <button onClick={onBack} className="font-semibold text-lg text-slate-800 dark:text-slate-100 hover:underline text-left truncate max-w-full">
+                              {contact.name}
+                          </button>
+                          <a href={`tel:${contact.phone}`} className="text-sm text-slate-500 mt-1 truncate hover:text-sky-600 hover:underline block">
+                              {contact.phone}
+                          </a>
+                          <a href={`mailto:${contact.email}`} className="text-sm text-slate-500 hover:text-sky-600 block mt-0.5 truncate">{contact.email}</a>
+                      </div>
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-5">
-                      {/* Location Col */}
-                      <div className="min-w-0">
-                              <p className="text-xs font-bold text-slate-400 uppercase mb-2 flex items-center">
-                              <MapPinIcon className="w-3 h-3 mr-1 flex-shrink-0" /> Site Location
-                              </p>
-                              <a
-                                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(serviceLocation)}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="font-semibold text-sm text-slate-800 dark:text-slate-200 hover:text-sky-600 hover:underline whitespace-pre-line block break-words"
-                              >
-                                  {serviceLocation || 'No address provided'}
+                  {/* Site Location Block */}
+                  <div className="min-w-0 border-t border-slate-200 dark:border-slate-700 pt-5">
+                      <p className="text-xs font-bold text-slate-400 uppercase mb-2 flex items-center">
+                          <MapPinIcon className="w-3 h-3 mr-1 flex-shrink-0" /> Site Location
+                      </p>
+                      <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(serviceLocation)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-semibold text-sm text-slate-800 dark:text-slate-200 hover:text-sky-600 hover:underline whitespace-pre-line block break-words"
+                      >
+                          {serviceLocation || 'No address provided'}
+                      </a>
+                      {ticket.jobLocationContactName && (
+                          <p className="text-xs text-slate-500 mt-1 truncate">Contact: {ticket.jobLocationContactName}</p>
+                      )}
+                      {ticket.jobLocationContactPhone && (
+                          <div className="flex items-center mt-1 space-x-2">
+                              <a href={`tel:${ticket.jobLocationContactPhone}`} className="text-xs text-slate-500 hover:text-sky-600 hover:underline flex items-center">
+                              <PhoneIcon className="w-3 h-3 mr-1" />
+                              {ticket.jobLocationContactPhone}
                               </a>
-                              {ticket.jobLocationContactName && (
-                                  <p className="text-xs text-slate-500 mt-1 truncate">Contact: {ticket.jobLocationContactName}</p>
-                              )}
-                              {ticket.jobLocationContactPhone && (
-                                  <div className="flex items-center mt-1 space-x-2">
-                                      <a href={`tel:${ticket.jobLocationContactPhone}`} className="text-xs text-slate-500 hover:text-sky-600 hover:underline flex items-center">
-                                      <PhoneIcon className="w-3 h-3 mr-1" />
-                                      {ticket.jobLocationContactPhone}
-                                      </a>
-                                  </div>
-                              )}
-                      </div>
-
-                      {/* Client Col */}
-                      <div className="min-w-0">
-                              <p className="text-xs font-bold text-slate-400 uppercase mb-2 flex items-center">
-                              <UserCircleIcon className="w-3 h-3 mr-1 flex-shrink-0" /> Client / Billing
-                              </p>
-                              <div className="flex flex-col">
-                                  <button onClick={onBack} className="font-semibold text-sm text-slate-800 dark:text-slate-100 hover:underline text-left truncate max-w-full">
-                                      {contact.name}
-                                  </button>
-                                  <a href={`tel:${contact.phone}`} className="text-xs text-slate-500 mt-1 truncate hover:text-sky-600 hover:underline block">
-                                      {contact.phone}
-                                  </a>
-                                  <a href={`mailto:${contact.email}`} className="text-xs text-slate-500 hover:text-sky-600 block mt-0.5 truncate">{contact.email}</a>
-                              </div>
-                      </div>
+                          </div>
+                      )}
                   </div>
-
-                  {/* Action Footer */}
-                  <div className="bg-slate-50 dark:bg-slate-900/30 border-t border-slate-200 dark:border-slate-700 p-3 -mx-5 rounded-b-lg">
-                      <div className="grid grid-cols-4 gap-3">
-                          <a href={`tel:${primaryPhone}`} className="flex flex-col items-center justify-center p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-sm hover:bg-green-50 dark:hover:bg-green-900/20 hover:border-green-200 dark:hover:border-green-800 transition-all group">
-                              <PhoneIcon className="w-5 h-5 text-green-600 dark:text-green-500 mb-1 group-hover:scale-110 transition-transform" />
-                              <span className="text-xs font-medium text-slate-700 dark:text-slate-300 group-hover:text-green-700 dark:group-hover:text-green-400">Call</span>
-                          </a>
-                          <a href={`sms:${primaryPhone}`} className="flex flex-col items-center justify-center p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-sm hover:bg-sky-50 dark:hover:bg-sky-900/20 hover:border-sky-200 dark:hover:border-sky-800 transition-all group">
-                              <MessageIcon className="w-5 h-5 text-sky-600 dark:text-sky-500 mb-1 group-hover:scale-110 transition-transform" />
-                              <span className="text-xs font-medium text-slate-700 dark:text-slate-300 group-hover:text-sky-700 dark:group-hover:text-sky-400">Text</span>
-                          </a>
-                          <a href={smsLink} className="flex flex-col items-center justify-center p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all group text-center">
-                              <CarIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-500 mb-1 group-hover:scale-110 transition-transform" />
-                              <span className="text-xs font-medium text-slate-700 dark:text-slate-300 group-hover:text-indigo-700 dark:group-hover:text-indigo-400 leading-tight text-center">On My Way</span>
-                          </a>
-                          <button
-                              onClick={() => onViewRouteForDate(ticket.date)}
-                              className="flex flex-col items-center justify-center p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-sm hover:bg-slate-50 dark:hover:bg-slate-900/20 hover:border-slate-300 dark:hover:border-slate-500 transition-all group text-center"
-                          >
-                              <MapIcon className="w-5 h-5 text-slate-600 dark:text-slate-400 mb-1 group-hover:scale-110 transition-transform" />
-                              <span className="text-xs font-medium text-slate-700 dark:text-slate-300 group-hover:text-slate-800 dark:group-hover:text-slate-200 leading-tight text-center">View Route</span>
-                          </button>
-                      </div>
+              </div>
+              
+              {/* Action Footer */}
+              <div className="bg-slate-50 dark:bg-slate-900/30 border-t border-slate-200 dark:border-slate-700 p-3 rounded-b-lg">
+                  <div className="grid grid-cols-4 gap-3">
+                      <a href={`tel:${primaryPhone}`} className="flex flex-col items-center justify-center p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-sm hover:bg-green-50 dark:hover:bg-green-900/20 hover:border-green-200 dark:hover:border-green-800 transition-all group">
+                          <PhoneIcon className="w-5 h-5 text-green-600 dark:text-green-500 mb-1 group-hover:scale-110 transition-transform" />
+                          <span className="text-xs font-medium text-slate-700 dark:text-slate-300 group-hover:text-green-700 dark:group-hover:text-green-400">Call</span>
+                      </a>
+                      <a href={`sms:${primaryPhone}`} className="flex flex-col items-center justify-center p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-sm hover:bg-sky-50 dark:hover:bg-sky-900/20 hover:border-sky-200 dark:hover:border-sky-800 transition-all group">
+                          <MessageIcon className="w-5 h-5 text-sky-600 dark:text-sky-500 mb-1 group-hover:scale-110 transition-transform" />
+                          <span className="text-xs font-medium text-slate-700 dark:text-slate-300 group-hover:text-sky-700 dark:group-hover:text-sky-400">Text</span>
+                      </a>
+                      <a href={smsLink} className="flex flex-col items-center justify-center p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all group text-center">
+                          <CarIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-500 mb-1 group-hover:scale-110 transition-transform" />
+                          <span className="text-xs font-medium text-slate-700 dark:text-slate-300 group-hover:text-indigo-700 dark:group-hover:text-indigo-400 leading-tight text-center">On My Way</span>
+                      </a>
+                      <button
+                          onClick={() => onViewRouteForDate(ticket.date)}
+                          className="flex flex-col items-center justify-center p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-sm hover:bg-slate-50 dark:hover:bg-slate-900/20 hover:border-slate-300 dark:hover:border-slate-500 transition-all group text-center"
+                      >
+                          <MapIcon className="w-5 h-5 text-slate-600 dark:text-slate-400 mb-1 group-hover:scale-110 transition-transform" />
+                          <span className="text-xs font-medium text-slate-700 dark:text-slate-300 group-hover:text-slate-800 dark:group-hover:text-slate-200 leading-tight text-center">View Route</span>
+                      </button>
                   </div>
               </div>
           </div>
           
+          {/* Work Notes Card */}
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
+              <div className="flex items-center mb-4 border-b dark:border-slate-700 pb-3">
+                  <ClipboardListIcon className="w-6 h-6 text-slate-600 dark:text-slate-300 mr-3" />
+                  <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Work Notes</h3>
+              </div>
+              <p className="text-slate-700 dark:text-slate-300 text-base whitespace-pre-wrap break-words">
+                  {ticket.notes || 'No notes provided for this job.'}
+              </p>
+          </div>
+
           {/* Safety Inspection Card */}
           <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
               <div className="flex justify-between items-center mb-4">
