@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { JobTicket, JobStatus, Part, JobTemplate, ALL_JOB_STATUSES, CatalogItem, PaymentStatus } from '../types.ts';
 import { XIcon, PlusIcon, TrashIcon } from './icons.tsx';
@@ -130,8 +129,8 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
   const currentTicketState = useMemo((): JobTicket => ({
       id: entry?.id || '',
       date,
-      time,
-      duration: duration ? Number(duration) : undefined,
+      time: time || undefined,
+      duration: duration !== '' ? Number(duration) : undefined,
       jobLocation,
       jobLocationContactName,
       jobLocationContactPhone,
