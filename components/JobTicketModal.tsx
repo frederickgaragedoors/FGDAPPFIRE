@@ -126,7 +126,7 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
       }
   };
 
-  const currentTicketState = useMemo((): JobTicket => ({
+  const currentTicketStateForSummary = useMemo((): JobTicket => ({
       id: entry?.id || '',
       date,
       time: time || undefined,
@@ -145,7 +145,7 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
       createdAt: entry?.createdAt,
   }), [entry, date, time, duration, jobLocation, jobLocationContactName, jobLocationContactPhone, status, paymentStatus, notes, parts, laborCost, salesTaxRate, processingFeeRate, deposit]);
 
-  const { subtotal, taxAmount, feeAmount, totalCost: finalTotal, balanceDue } = calculateJobTicketTotal(currentTicketState);
+  const { subtotal, taxAmount, feeAmount, totalCost: finalTotal, balanceDue } = calculateJobTicketTotal(currentTicketStateForSummary);
 
   const summaryPaidAmount = paymentStatus === 'paid_in_full' 
     ? finalTotal 
@@ -173,7 +173,28 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (notes.trim() || parts.length > 0) {
-      onSave(currentTicketState);
+      // Re-construct the object here to be absolutely certain we have the latest state.
+      // This is a more robust pattern that avoids relying on memoized state,
+      // and ensures optional fields are cleanly omitted if empty.
+      const ticketToSave = {
+          id: entry?.id,
+          date,
+          time: time || undefined,
+          duration: duration !== '' && duration !== null ? Number(duration) : undefined,
+          jobLocation,
+          jobLocationContactName,
+          jobLocationContactPhone,
+          status,
+          paymentStatus,
+          notes,
+          parts,
+          laborCost: Number(laborCost || 0),
+          salesTaxRate: Number(salesTaxRate || 0),
+          processingFeeRate: Number(processingFeeRate || 0),
+          deposit: Number(deposit || 0),
+          createdAt: entry?.createdAt,
+      };
+      onSave(ticketToSave);
     } else {
       alert("Please add some notes or parts to the job ticket before saving.");
     }
