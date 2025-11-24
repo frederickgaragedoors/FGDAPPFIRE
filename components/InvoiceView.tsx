@@ -294,7 +294,7 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
             {/* Invoice Paper */}
             <div className="p-4 md:p-8 flex-grow">
                 <div id="printable-invoice" ref={invoiceContentRef} className="max-w-4xl mx-auto bg-white p-8 md:p-12 shadow-lg invoice-paper">
-                    <header className="flex flex-col md:flex-row justify-between items-start pb-6 border-b border-slate-200 text-slate-800">
+                    <header className="flex flex-col md:flex-row justify-between items-center pb-6 border-b border-slate-200 text-slate-800">
                          {/* Left: Logo (First in visual order for mobile usually, but here we use order classes) */}
                         <div className="w-full md:w-1/3 flex justify-center md:justify-start order-1">
                             {businessInfo.logoUrl && (
@@ -303,7 +303,7 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
                         </div>
 
                         {/* Center: Business Info */}
-                        <div className="w-full md:w-1/3 text-left md:pl-4 order-2 mt-4 md:mt-0">
+                        <div className="w-full md:w-1/3 text-center order-2 mt-4 md:mt-0">
                             <h1 className="text-xl font-bold break-words">{businessInfo.name || 'Your Company'}</h1>
                             <div className="text-sm text-slate-500 mt-1 space-y-0.5">
                                 <p className="whitespace-pre-line break-words">{businessInfo.address}</p>
