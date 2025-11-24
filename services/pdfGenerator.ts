@@ -96,8 +96,8 @@ export const generatePdf = async ({ contact, ticket, businessInfo, docType }: Ge
 
     // 2. Draw header elements using calculated max height
     if (businessInfo.logoUrl && logoDims.width > 0) {
-        const format = businessInfo.logoUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
-        doc.addImage(businessInfo.logoUrl, format, margin, yPos, logoDims.width, logoDims.height);
+        // Let jsPDF infer the format from the data URL for better reliability
+        doc.addImage(businessInfo.logoUrl, margin, yPos, logoDims.width, logoDims.height);
     }
     
     const infoX = margin + logoDims.width + (logoDims.width > 0 ? 20 : 0);
