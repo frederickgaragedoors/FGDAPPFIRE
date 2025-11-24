@@ -113,21 +113,26 @@ export const generatePdf = async ({ contact, ticket, businessInfo, docType }: Ge
         }
     }
     
-    const infoX = margin + logoDims.width + (logoDims.width > 0 ? 20 : 0);
+    // Centered business info
+    const centerX = pageWidth / 2;
     let currentInfoY = yPos + 10;
     doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(30);
-    doc.text(businessInfo.name || 'Your Company', infoX, currentInfoY);
-    currentInfoY += 15;
+    doc.text(businessInfo.name || 'Your Company', centerX, currentInfoY, { align: 'center' });
+    currentInfoY += 20;
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100);
-    const addressLines = doc.splitTextToSize(businessInfo.address || '', infoBlockWidth);
-    doc.text(addressLines, infoX, currentInfoY);
-    currentInfoY += (addressLines.length * 12);
-    if(businessInfo.phone) { doc.text(businessInfo.phone, infoX, currentInfoY); currentInfoY += 12; }
-    if(businessInfo.email) { doc.text(businessInfo.email, infoX, currentInfoY); }
+
+    const businessDetailsText = [
+        businessInfo.address || '',
+        businessInfo.phone || '',
+        businessInfo.email || ''
+    ].filter(Boolean).join('\n');
+
+    const detailLines = doc.splitTextToSize(businessDetailsText, 180); 
+    doc.text(detailLines, centerX, currentInfoY, { align: 'center' });
 
     const rightColX = pageWidth - margin;
     let docInfoY = yPos + 10;
