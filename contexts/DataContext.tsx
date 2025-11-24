@@ -324,7 +324,10 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
 
     const handleUpdateContactJobTickets = async (contactId: string, ticketOrTickets: JobTicket | JobTicket[] | (Omit<JobTicket, "id"> & { id?: string })) => {
         const contact = contacts.find(c => c.id === contactId);
-        if (!contact) return;
+        if (!contact) {
+            console.error("Contact not found for job ticket update");
+            return;
+        }
         
         let updatedTickets: JobTicket[];
         
@@ -345,9 +348,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
              }
         }
         
-        const updatedContact = { ...contact, jobTickets: updatedTickets };
-
         if (isGuestMode) {
+            const updatedContact = { ...contact, jobTickets: updatedTickets };
             const updatedContacts = contacts.map(c => c.id === contactId ? updatedContact : c);
             await idb.saveContacts(updatedContacts);
             setContacts(updatedContacts);
@@ -356,9 +358,15 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
         
         if (!user || !db) return;
         const contactRef = doc(db, 'users', user.uid, 'contacts', contactId);
-        // FIX: Use setDoc to overwrite the entire document. This is more robust for PWAs with offline persistence
-        // than using updateDoc for a nested array, which can cause sync issues.
-        await setDoc(contactRef, updatedContact);
+        
+        try {
+            await updateDoc(contactRef, {
+                jobTickets: updatedTickets
+            });
+        } catch (error) {
+            console.error("Failed to update job tickets in cloud:", error);
+            alert(`Failed to save job. Error: ${error instanceof Error ? error.message : String(error)}`);
+        }
     };
 
     const saveSettings = async (updates: any) => {
