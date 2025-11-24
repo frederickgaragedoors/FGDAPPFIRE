@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { Contact, JobTicket, FileAttachment, ViewState } from '../types.ts';
 import { useData } from '../contexts/DataContext.tsx';
@@ -204,12 +205,12 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
             `}</style>
             {/* Toolbar */}
             <div className="p-4 border-b border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 print:hidden">
-                <div className="flex flex-col xl:flex-row items-center xl:justify-between gap-4 xl:gap-0">
-                    <div className="w-full xl:w-auto flex items-center justify-center xl:justify-start relative">
-                        <button onClick={onClose} className="absolute left-0 xl:static p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700">
+                <div className="flex flex-col lg:flex-row items-center lg:justify-between gap-4 lg:gap-0">
+                    <div className="w-full lg:w-auto flex items-center justify-center lg:justify-start relative">
+                        <button onClick={onClose} className="absolute left-0 lg:static p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700">
                             <ArrowLeftIcon className="w-6 h-6 text-slate-600 dark:text-slate-300" />
                         </button>
-                        <div className="flex items-center justify-center w-full xl:w-auto">
+                        <div className="flex items-center justify-center w-full lg:w-auto">
                             <div className="flex items-center space-x-1 p-1 bg-slate-200 dark:bg-slate-700 rounded-lg sm:ml-4">
                                 <button
                                     onClick={() => setDocType('estimate')}
@@ -226,7 +227,7 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
                             </div>
                         </div>
                     </div>
-                    <div className="w-full xl:w-auto flex flex-wrap items-center justify-center xl:justify-end gap-2">
+                    <div className="w-full lg:w-auto flex flex-wrap items-center justify-center lg:justify-end gap-2">
                         <button 
                              onClick={handleEmail}
                              disabled={isSaving}
