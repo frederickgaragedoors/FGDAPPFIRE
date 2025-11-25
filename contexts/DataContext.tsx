@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import { FirebaseUser as User, auth, db, storage } from '../firebase.ts';
 import { collection, doc, onSnapshot, setDoc, deleteDoc, updateDoc, QuerySnapshot, DocumentData, DocumentSnapshot } from 'firebase/firestore';
@@ -32,10 +33,12 @@ interface DataContextType {
     // Actions
     setViewState: (viewState: ViewState) => void;
     setContactSelectorDate: (date: Date | null) => void;
-    handleSaveContact: (contactData: Omit<Contact, 'id'> & { id?: string }, newFileObjects: { [id: string]: File }) => Promise<void>;
+    // FIX: The `lastModified` property is set within `handleSaveContact`, so the caller shouldn't be required to provide it.
+    handleSaveContact: (contactData: Omit<Contact, 'id' | 'lastModified'> & { id?: string }, newFileObjects: { [id: string]: File }) => Promise<void>;
     handleDeleteContact: (id: string) => Promise<boolean>;
     handleAddFilesToContact: (contactId: string, newFiles: FileAttachment[], newFileObjects: { [id: string]: File }) => Promise<void>;
     handleUpdateContactJobTickets: (contactId: string, ticketDataOrArray: (Omit<JobTicket, "id"> & { id?: string }) | JobTicket[]) => Promise<void>;
+    handleTogglePinContact: (contactId: string) => Promise<void>;
     saveSettings: (updates: any) => Promise<void>;
     loadDemoData: () => Promise<void>;
     onSwitchToCloud: () => void;
@@ -187,13 +190,20 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
         }
     };
 
-    const handleSaveContact = async (contactData: Omit<Contact, 'id'> & { id?: string }, newFileObjects: { [id: string]: File }) => {
+    const handleSaveContact = async (contactData: Omit<Contact, 'id' | 'lastModified'> & { id?: string }, newFileObjects: { [id: string]: File }) => {
         const contactId = contactData.id || generateId();
+        const now = new Date().toISOString();
         let finalPhotoUrl = contactData.photoUrl;
         let finalFiles = [...(contactData.files || [])];
 
         if (isGuestMode) {
-            const newContact = { ...contactData, id: contactId, jobTickets: contactData.jobTickets || [] } as Contact;
+            const newContact = { 
+                ...contactData, 
+                id: contactId, 
+                jobTickets: contactData.jobTickets || [],
+                lastModified: now,
+                isPinned: contactData.isPinned || false,
+            } as Contact;
             const updatedContacts = contactData.id
                 ? contacts.map(c => c.id === contactData.id ? newContact : c)
                 : [...contacts, newContact];
@@ -226,8 +236,9 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
                     processedFiles.push(file); // Keep existing file from cloud
                 }
             }
+            
+            const existingContact = contacts.find(c => c.id === contactId);
 
-            // Explicitly build the object to ensure all fields, especially empty arrays, are included.
             const contactToSave: Contact = {
                 id: contactId,
                 name: contactData.name || '',
@@ -237,8 +248,10 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
                 photoUrl: finalPhotoUrl || '',
                 files: processedFiles,
                 customFields: contactData.customFields || [],
-                jobTickets: contactData.jobTickets || [], // This is the crucial fix
+                jobTickets: contactData.jobTickets || [],
                 doorProfiles: contactData.doorProfiles || [],
+                lastModified: now,
+                isPinned: contactData.id ? (existingContact?.isPinned || false) : false,
             };
 
             const contactDoc = doc(db, 'users', user.uid, 'contacts', contactId);
@@ -294,8 +307,10 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
         const contact = contacts.find(c => c.id === contactId);
         if (!contact) return;
         
+        const now = new Date().toISOString();
+
         if (isGuestMode) {
-             const updatedContact = { ...contact, files: [...contact.files, ...newFiles] };
+             const updatedContact = { ...contact, files: [...contact.files, ...newFiles], lastModified: now };
              const updatedContacts = contacts.map(c => c.id === contactId ? updatedContact : c);
              await idb.saveContacts(updatedContacts);
              setContacts(updatedContacts);
@@ -312,9 +327,9 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
                 const downloadURL = await getDownloadURL(fileRef);
                 uploadedFiles.push({ ...file, dataUrl: downloadURL });
             }
-            const updatedContact = { ...contact, files: [...contact.files, ...uploadedFiles] };
+            const finalFiles = [...contact.files, ...uploadedFiles];
             const contactRef = doc(db, 'users', user.uid, 'contacts', contactId);
-            await updateDoc(contactRef, { files: updatedContact.files });
+            await updateDoc(contactRef, { files: finalFiles, lastModified: now });
         } catch (error) {
             console.error("Failed to upload files:", error);
             alert("Failed to upload attachments.");
@@ -351,7 +366,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
             }
         }
         
-        const updatedContact = { ...contact, jobTickets: finalTickets };
+        const updatedContact = { ...contact, jobTickets: finalTickets, lastModified: new Date().toISOString() };
 
         if (isGuestMode) {
             const updatedContacts = contacts.map(c => c.id === contactId ? updatedContact : c);
@@ -368,6 +383,36 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
         } catch (error) {
             console.error("Failed to update job tickets in cloud:", error);
             alert(`Failed to save job. Error: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    };
+
+    const handleTogglePinContact = async (contactId: string) => {
+        const contact = contacts.find(c => c.id === contactId);
+        if (!contact) return;
+
+        const updatedContact = { 
+            ...contact, 
+            isPinned: !contact.isPinned,
+            lastModified: new Date().toISOString(),
+        };
+
+        if (isGuestMode) {
+            const updatedContacts = contacts.map(c => c.id === contactId ? updatedContact : c);
+            await idb.saveContacts(updatedContacts);
+            setContacts(updatedContacts);
+            return;
+        }
+
+        if (!user || !db) return;
+        const contactRef = doc(db, 'users', user.uid, 'contacts', contactId);
+        try {
+            await updateDoc(contactRef, { 
+                isPinned: updatedContact.isPinned,
+                lastModified: updatedContact.lastModified
+            });
+        } catch (error) {
+            console.error("Failed to toggle pin status:", error);
+            alert("Failed to update pin status.");
         }
     };
 
@@ -496,6 +541,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
         handleDeleteContact,
         handleAddFilesToContact,
         handleUpdateContactJobTickets,
+        handleTogglePinContact,
         saveSettings,
         loadDemoData,
         onSwitchToCloud,
