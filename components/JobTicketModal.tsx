@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { JobTicket, JobStatus, Part, JobTemplate, ALL_JOB_STATUSES, CatalogItem, PaymentStatus } from '../types.ts';
+import { JobTicket, JobStatus, Part, JobTemplate, ALL_JOB_STATUSES, CatalogItem, PaymentStatus, StatusHistoryEntry } from '../types.ts';
 import { XIcon, PlusIcon, TrashIcon } from './icons.tsx';
 import { generateId, calculateJobTicketTotal } from '../utils.ts';
 import { useGoogleMaps } from '../hooks/useGoogleMaps.ts';
@@ -24,7 +24,6 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [duration, setDuration] = useState<number | ''>('');
-  const [status, setStatus] = useState<JobStatus>('Estimate Scheduled');
   const [jobLocation, setJobLocation] = useState('');
   const [jobLocationContactName, setJobLocationContactName] = useState('');
   const [jobLocationContactPhone, setJobLocationContactPhone] = useState('');
@@ -35,6 +34,7 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
   const [salesTaxRate, setSalesTaxRate] = useState<number | ''>(0);
   const [processingFeeRate, setProcessingFeeRate] = useState<number | ''>(0);
   const [deposit, setDeposit] = useState<number | ''>(0);
+  const [statusHistory, setStatusHistory] = useState<StatusHistoryEntry[]>([]);
 
   const locationInputRef = useRef<HTMLInputElement>(null);
   const { isLoaded: isMapsLoaded, error: mapsError } = useGoogleMaps(apiKey);
@@ -44,7 +44,6 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
       setDate(entry.date);
       setTime(entry.time || '');
       setDuration(entry.duration || '');
-      setStatus(entry.status);
       setJobLocation(entry.jobLocation || '');
       setJobLocationContactName(entry.jobLocationContactName || '');
       setJobLocationContactPhone(entry.jobLocationContactPhone || '');
@@ -55,12 +54,20 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
       setSalesTaxRate(entry.salesTaxRate || 0);
       setProcessingFeeRate(entry.processingFeeRate || 0);
       setDeposit(entry.deposit || 0);
+
+      const history = entry.statusHistory && entry.statusHistory.length > 0
+          ? [...entry.statusHistory].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+          : [{ id: generateId(), status: entry.status, timestamp: entry.createdAt || entry.date, notes: 'Job created.' }];
+      setStatusHistory(history);
+
     } else {
+      const now = new Date();
+      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+      const initialTimestamp = now.toISOString().slice(0, 16);
+      
       setDate(new Date().toISOString().split('T')[0]);
       setTime('');
       setDuration('');
-      setStatus('Estimate Scheduled');
-      // Default to contact address for new tickets if available
       setJobLocation(contactAddress || '');
       setJobLocationContactName('');
       setJobLocationContactPhone('');
@@ -71,6 +78,13 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
       setSalesTaxRate(defaultSalesTaxRate || 0);
       setProcessingFeeRate(defaultProcessingFeeRate || 0);
       setDeposit(0);
+
+      setStatusHistory([{
+          id: generateId(),
+          status: 'Estimate Scheduled',
+          timestamp: new Date(initialTimestamp).toISOString(),
+          notes: 'Job created.'
+      }]);
     }
   }, [entry, defaultSalesTaxRate, defaultProcessingFeeRate, contactAddress]);
 
@@ -126,6 +140,36 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
       }
   };
 
+  const handleHistoryChange = (id: string, field: keyof StatusHistoryEntry, value: string | number | undefined) => {
+    const processedValue = (field === 'timestamp') 
+        ? new Date(value as string).toISOString() 
+        : (field === 'duration' ? (value !== '' ? Number(value) : undefined) : value);
+
+    setStatusHistory(prev => prev.map(item => item.id === id ? { ...item, [field]: processedValue } : item));
+  };
+
+  const addHistoryEntry = () => {
+      const now = new Date();
+      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+      const newEntry: StatusHistoryEntry = {
+          id: generateId(),
+          status: statusHistory[0]?.status || 'Scheduled', // Get status from the newest entry
+          timestamp: now.toISOString(),
+          notes: '',
+          duration: undefined
+      };
+      // Add new entry and re-sort descending to ensure it's at the top.
+      setStatusHistory(prev => [...prev, newEntry].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+  };
+
+  const deleteHistoryEntry = (id: string) => {
+      if (statusHistory.length <= 1) {
+          alert("A job must have at least one status entry.");
+          return;
+      }
+      setStatusHistory(prev => prev.filter(item => item.id !== id));
+  };
+
   const currentTicketStateForSummary = useMemo((): JobTicket => ({
       id: entry?.id || '',
       date,
@@ -134,7 +178,7 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
       jobLocation,
       jobLocationContactName,
       jobLocationContactPhone,
-      status,
+      status: 'Scheduled', // Dummy status, not used for calculation
       paymentStatus,
       notes,
       parts,
@@ -143,7 +187,7 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
       processingFeeRate: Number(processingFeeRate || 0),
       deposit: Number(deposit || 0),
       createdAt: entry?.createdAt,
-  }), [entry, date, time, duration, jobLocation, jobLocationContactName, jobLocationContactPhone, status, paymentStatus, notes, parts, laborCost, salesTaxRate, processingFeeRate, deposit]);
+  }), [entry, date, time, duration, jobLocation, jobLocationContactName, jobLocationContactPhone, paymentStatus, notes, parts, laborCost, salesTaxRate, processingFeeRate, deposit]);
 
   const { subtotal, taxAmount, feeAmount, totalCost: finalTotal, balanceDue } = calculateJobTicketTotal(currentTicketStateForSummary);
 
@@ -172,52 +216,54 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (notes.trim() || parts.length > 0) {
-      const now = new Date();
-      const currentHours = String(now.getHours()).padStart(2, '0');
-      const currentMinutes = String(now.getMinutes()).padStart(2, '0');
-      const currentTime = `${currentHours}:${currentMinutes}`;
-      
-      const ticketToSave = {
-          id: entry?.id,
-          date,
-          time: time || currentTime,
-          duration: (duration !== '' && duration !== null) ? Number(duration) : 60,
-          jobLocation,
-          jobLocationContactName,
-          jobLocationContactPhone,
-          status,
-          paymentStatus,
-          notes,
-          parts,
-          laborCost: Number(laborCost || 0),
-          salesTaxRate: Number(salesTaxRate || 0),
-          processingFeeRate: Number(processingFeeRate || 0),
-          deposit: Number(deposit || 0),
-          createdAt: entry?.createdAt,
-      };
-      onSave(ticketToSave);
-    } else {
-      alert("Please add some notes or parts to the job ticket before saving.");
+    
+    const sortedHistory = [...statusHistory].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    if (sortedHistory.length === 0) {
+        alert("A job must have at least one status entry.");
+        return;
     }
+
+    const latestStatus = sortedHistory[0].status;
+
+    const ticketToSave = {
+        id: entry?.id,
+        date,
+        time: time || undefined,
+        duration: (duration !== '' && duration !== null) ? Number(duration) : undefined,
+        jobLocation,
+        jobLocationContactName,
+        jobLocationContactPhone,
+        status: latestStatus,
+        statusHistory: sortedHistory,
+        paymentStatus,
+        notes,
+        parts,
+        laborCost: Number(laborCost || 0),
+        salesTaxRate: Number(salesTaxRate || 0),
+        processingFeeRate: Number(processingFeeRate || 0),
+        deposit: Number(deposit || 0),
+        createdAt: entry?.createdAt,
+    };
+    onSave(ticketToSave);
   };
 
   const visibleStatuses = useMemo(() => {
     return ALL_JOB_STATUSES.filter(s => 
-        (enabledStatuses ? enabledStatuses[s] : true) || (entry && entry.status === s)
+        (enabledStatuses ? enabledStatuses[s] : true)
     );
-  }, [enabledStatuses, entry]);
-
+  }, [enabledStatuses]);
+  
   const inputStyles = "block w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm";
   const labelStyles = "block text-sm font-medium text-slate-600 dark:text-slate-300";
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
-      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
         <form onSubmit={handleSubmit} className="flex flex-col flex-grow min-h-0">
           <div className="p-6 border-b dark:border-slate-700 flex-shrink-0">
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">{entry ? 'Edit Job Ticket' : 'Add Job Ticket'}</h2>
+              <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">{entry ? 'Edit Job' : 'Add Job'}</h2>
               <button type="button" onClick={onClose} className="p-1 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700">
                 <XIcon className="w-5 h-5" />
               </button>
@@ -241,7 +287,7 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label htmlFor="job-date" className={labelStyles}>Date</label>
+                    <label htmlFor="job-date" className={labelStyles}>Primary Date</label>
                     <input
                     type="date"
                     id="job-date"
@@ -332,20 +378,46 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
                 </div>
             </div>
 
-            <div>
-                <label htmlFor="job-status" className={labelStyles}>Status</label>
-                <select
-                id="job-status"
-                value={status}
-                onChange={e => setStatus(e.target.value as JobStatus)}
-                className={`mt-1 ${inputStyles}`}
-                >
-                {visibleStatuses.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
+            <div className="p-3 bg-slate-50 dark:bg-slate-700/30 border border-slate-200 dark:border-slate-600 rounded-md space-y-3">
+                <div className="flex justify-between items-center">
+                    <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Editable Status History</h4>
+                    <button type="button" onClick={addHistoryEntry} className="text-xs font-medium text-sky-600 hover:text-sky-700">+ Add Entry</button>
+                </div>
+                <div className="space-y-3 pr-2">
+                    {statusHistory.map(entry => {
+                         const localTime = new Date(entry.timestamp);
+                         localTime.setMinutes(localTime.getMinutes() - localTime.getTimezoneOffset());
+                         const timestampForInput = localTime.toISOString().slice(0, 16);
+                        return (
+                        <div key={entry.id} className="relative p-3 bg-white dark:bg-slate-700 rounded-md border border-slate-200 dark:border-slate-600">
+                            <button type="button" onClick={() => deleteHistoryEntry(entry.id)} className="absolute top-2 right-2 p-1 bg-white dark:bg-slate-600 rounded-full text-slate-400 hover:text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 shadow-sm z-10"><TrashIcon className="w-3.5 h-3.5" /></button>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-4">
+                                <div>
+                                    <label className="text-xs text-slate-500 dark:text-slate-400">Status</label>
+                                    <select value={entry.status} onChange={e => handleHistoryChange(entry.id, 'status', e.target.value)} className={`w-full text-sm ${inputStyles}`}>
+                                         {visibleStatuses.map(s => <option key={s} value={s}>{s}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                     <label className="text-xs text-slate-500 dark:text-slate-400">Timestamp</label>
+                                     <input type="datetime-local" value={timestampForInput} onChange={e => handleHistoryChange(entry.id, 'timestamp', e.target.value)} className={`w-full text-sm ${inputStyles}`} />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-slate-500 dark:text-slate-400">Notes</label>
+                                    <input type="text" value={entry.notes || ''} onChange={e => handleHistoryChange(entry.id, 'notes', e.target.value)} placeholder="Notes for this status..." className={`w-full text-sm ${inputStyles}`} />
+                                </div>
+                                <div>
+                                     <label className="text-xs text-slate-500 dark:text-slate-400">Duration (min)</label>
+                                     <input type="number" value={entry.duration || ''} onChange={e => handleHistoryChange(entry.id, 'duration', e.target.value)} placeholder="Est. Mins" className={`w-full text-sm ${inputStyles}`} />
+                                </div>
+                            </div>
+                        </div>
+                    )})}
+                </div>
             </div>
             
             <div>
-              <label htmlFor="job-notes" className={labelStyles}>Notes</label>
+              <label htmlFor="job-notes" className={labelStyles}>General Job Notes</label>
               <textarea
                 id="job-notes"
                 value={notes}
@@ -356,8 +428,7 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
               ></textarea>
             </div>
             
-            {status !== 'Estimate Scheduled' && (
-              <div>
+            <div>
                   <h3 className="text-md font-medium text-slate-700 dark:text-slate-200">Costs & Payments</h3>
                   <div className="mt-2 p-4 border border-slate-200 dark:border-slate-700 rounded-lg space-y-3">
                       <div>
@@ -556,31 +627,19 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
                       </div>
                   </div>
               </div>
-            )}
           </div>
           
           <div className="bg-slate-50 dark:bg-slate-900 px-6 py-4 flex justify-between items-center rounded-b-lg border-t dark:border-slate-700 flex-shrink-0">
-            {status !== 'Estimate Scheduled' ? (
-                <div className="text-sm dark:text-slate-300">
-                    <p>Subtotal: <span className="font-medium">${subtotal.toFixed(2)}</span></p>
-                    <p>Tax ({Number(salesTaxRate || 0)}%): <span className="font-medium">${taxAmount.toFixed(2)}</span></p>
-                    <p>Card Fee ({Number(processingFeeRate || 0)}%): <span className="font-medium">${feeAmount.toFixed(2)}</span></p>
-                    <p className="font-bold text-lg text-slate-800 dark:text-slate-100 mt-1">Total: <span className="font-bold text-xl">${finalTotal.toFixed(2)}</span></p>
-                    
-                    {summaryPaidAmount > 0 && (
-                        <p className="text-green-600 dark:text-green-400 font-medium mt-1">Paid: -${summaryPaidAmount.toFixed(2)}</p>
-                    )}
-                    <p className="font-bold text-slate-800 dark:text-slate-100 mt-1">Balance: <span className="font-bold">${summaryBalanceDue.toFixed(2)}</span></p>
-                </div>
-            ) : (
-                <div></div>
-            )}
+            <div>
+                <p className="font-bold text-lg text-slate-800 dark:text-slate-100">Total: <span className="font-bold text-xl">${finalTotal.toFixed(2)}</span></p>
+                <p className="font-bold text-slate-800 dark:text-slate-100 mt-1">Balance: <span className="font-bold">${summaryBalanceDue.toFixed(2)}</span></p>
+            </div>
             <div className="flex space-x-2">
                 <button type="button" onClick={onClose} className="px-4 py-2 rounded-md text-sm font-medium text-slate-700 dark:text-slate-200 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors">
                 Cancel
                 </button>
                 <button type="submit" className="px-4 py-2 rounded-md text-sm font-medium text-white bg-sky-500 hover:bg-sky-600 transition-colors">
-                Save Ticket
+                Save
                 </button>
             </div>
           </div>

@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { JobTicket } from '../types.ts';
 import { useData } from '../contexts/DataContext.tsx';
@@ -55,9 +52,33 @@ const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack, onViewJob
         const jobs: (JobTicket & { contactName: string; contactAddress: string; contactId: string })[] = [];
         (contacts || []).forEach(contact => {
             (contact.jobTickets || []).forEach(ticket => {
-                if (ticket.date === selectedDate && ticket.status !== 'Declined') {
+                const history = ticket.statusHistory && ticket.statusHistory.length > 0
+                    ? [...ticket.statusHistory].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                    : [{ status: ticket.status, timestamp: ticket.createdAt || ticket.date, id: 'fallback' }];
+                
+                const latestStatusEntry = history[0];
+                const timestamp = latestStatusEntry.timestamp;
+                const hasTime = timestamp.includes('T');
+                const displayDate = hasTime ? new Date(timestamp) : new Date(`${timestamp}T00:00:00`);
+
+                const localDateString = getLocalDateString(displayDate);
+                
+                const isRoutableStatus = ticket.status === 'Estimate Scheduled' || ticket.status === 'Scheduled';
+
+                if (localDateString === selectedDate && isRoutableStatus) {
+                    let effectiveTime: string | undefined;
+                    if (hasTime) {
+                        const hours = String(displayDate.getHours()).padStart(2, '0');
+                        const minutes = String(displayDate.getMinutes()).padStart(2, '0');
+                        effectiveTime = `${hours}:${minutes}`;
+                    } else {
+                        effectiveTime = ticket.time;
+                    }
+
                     jobs.push({
                         ...ticket,
+                        date: localDateString, 
+                        time: effectiveTime,
                         contactId: contact.id,
                         contactName: contact.name,
                         contactAddress: contact.address

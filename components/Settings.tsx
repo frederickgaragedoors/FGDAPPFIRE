@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { DefaultFieldSetting, BusinessInfo, JobTemplate, JobStatus, ALL_JOB_STATUSES, EmailSettings, CatalogItem, DEFAULT_ON_MY_WAY_TEMPLATE, MapSettings, Theme } from '../types.ts';
 import { ArrowLeftIcon, TrashIcon, PlusIcon, DownloadIcon, UploadIcon, UserCircleIcon, EditIcon, CalendarIcon, ChevronDownIcon, MapPinIcon } from './icons.tsx';
@@ -72,7 +71,6 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
     const [editingTemplate, setEditingTemplate] = useState<JobTemplate | null>(null);
     const [newCatalogItemName, setNewCatalogItemName] = useState('');
     const [newCatalogItemCost, setNewCatalogItemCost] = useState<number | ''>('');
-    const [autoCalendarExportEnabled, setAutoCalendarExportEnabled] = useState<boolean>(false);
     const [isRestoreConfirmOpen, setIsRestoreConfirmOpen] = useState(false);
     const [restoreFileContent, setRestoreFileContent] = useState<string | null>(null);
 
@@ -558,13 +556,6 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
                      <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-100">Calendar Integration</h3>
                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Export your jobs to an external calendar.</p>
                       <div className="mt-6 space-y-3">
-                         <div className="flex items-center justify-between gap-4 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
-                            <div>
-                                <p className="font-medium text-slate-700 dark:text-slate-200">Auto-Export .ics on Change</p>
-                                <p className="text-xs text-slate-500 dark:text-slate-400">Automatically prompt to download an updated .ics file when you add, edit, or delete jobs.</p>
-                            </div>
-                            <button onClick={() => setAutoCalendarExportEnabled(!autoCalendarExportEnabled)} className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 ${autoCalendarExportEnabled ? 'bg-sky-500' : 'bg-slate-300 dark:bg-slate-600'}`}><span className={`inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200 ${autoCalendarExportEnabled ? 'translate-x-5' : 'translate-x-0'}`} /></button>
-                        </div>
                          <div className="flex items-center justify-between gap-4 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
                             <div>
                                 <p className="font-medium text-slate-700 dark:text-slate-200">Manual Export</p>

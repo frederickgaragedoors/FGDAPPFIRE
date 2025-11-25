@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { Contact, JobTicket, FileAttachment, ViewState } from '../types.ts';
+import React, { useState, useRef, useMemo } from 'react';
+import { Contact, JobTicket, FileAttachment, ViewState, SafetyInspection } from '../types.ts';
 import { useData } from '../contexts/DataContext.tsx';
 import { ArrowLeftIcon, MailIcon, ShareIcon } from './icons.tsx';
 import { generateId, fileToDataUrl, calculateJobTicketTotal, processTemplate, formatPhoneNumber } from '../utils.ts';
@@ -57,9 +57,19 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
             displayTitle = 'INVOICE';
         }
     }
+
+    const normalizedInspections = useMemo<SafetyInspection[]>(() => {
+        if (ticket.inspections && ticket.inspections.length > 0) {
+            return ticket.inspections;
+        }
+        if (ticket.inspection && ticket.inspection.length > 0) {
+            return [{ id: 'migrated_inspection', name: 'Safety Inspection', items: ticket.inspection }];
+        }
+        return [];
+    }, [ticket.inspections, ticket.inspection]);
     
-    const hasInspectionResults = (ticket.inspection || []).some(i => 
-        i.status === 'Pass' || i.status === 'Fail' || i.status === 'Repaired'
+    const hasInspectionResults = normalizedInspections.some(inspection =>
+        inspection.items.some(i => ['Pass', 'Fail', 'Repaired'].includes(i.status || 'N/A'))
     );
 
     const handleDownload = async () => {
@@ -549,29 +559,32 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
                         </section>
                      )}
 
-                     {hasInspectionResults && (
+                    {hasInspectionResults && (
                         <section className="mt-8 pt-6 border-t border-slate-200">
-                            <h3 className="text-sm font-bold text-slate-700 uppercase mb-3">25-Point Safety Inspection Summary</h3>
+                            <h3 className="text-sm font-bold text-slate-700 uppercase mb-3">Safety Inspection Summary</h3>
                             
-                            <div className="text-sm">
-                                {(() => {
-                                    const failedOrRepaired = (ticket.inspection || []).filter(i => i.status === 'Fail' || i.status === 'Repaired');
-                                    const passedCount = (ticket.inspection || []).filter(i => i.status === 'Pass').length;
-                                    
+                            <div className="text-sm space-y-4">
+                                {normalizedInspections.map((inspection) => {
+                                    const failedOrRepaired = inspection.items.filter(i => i.status === 'Fail' || i.status === 'Repaired');
+                                    const passedCount = inspection.items.filter(i => i.status === 'Pass').length;
+
                                     return (
-                                        <>
+                                        <div key={inspection.id}>
+                                            {normalizedInspections.length > 1 && (
+                                                <h4 className="font-semibold text-slate-600 mb-2">{inspection.name}</h4>
+                                            )}
                                             {failedOrRepaired.length > 0 && (
                                                 <table className="w-full text-left border-collapse mb-4">
                                                     <thead>
-                                                        <tr className="bg-red-50 text-red-800">
-                                                            <th className="p-2 border border-red-100 w-1/2">Item</th>
-                                                            <th className="p-2 border border-red-100 w-1/4">Status</th>
-                                                            <th className="p-2 border border-red-100 w-1/4">Notes</th>
+                                                        <tr className="bg-red-50 text-red-800 text-xs">
+                                                            <th className="p-2 border border-red-100 w-1/2 font-semibold">Item</th>
+                                                            <th className="p-2 border border-red-100 w-1/4 font-semibold">Status</th>
+                                                            <th className="p-2 border border-red-100 w-1/4 font-semibold">Notes</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
                                                         {failedOrRepaired.map(item => (
-                                                            <tr key={item.id}>
+                                                            <tr key={item.id} className="text-xs">
                                                                 <td className="p-2 border border-slate-200 text-slate-700">{item.name}</td>
                                                                 <td className={`p-2 border border-slate-200 font-bold ${item.status === 'Fail' ? 'text-red-600' : 'text-blue-600'}`}>{item.status}</td>
                                                                 <td className="p-2 border border-slate-200 text-slate-500 italic">{item.notes || '-'}</td>
@@ -581,16 +594,19 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
                                                 </table>
                                             )}
                                             {passedCount > 0 && (
-                                                <p className="text-slate-600">
+                                                <p className="text-slate-600 text-xs">
                                                     <span className="font-bold text-green-600">{passedCount}</span> additional items passed safety inspection.
                                                 </p>
                                             )}
-                                        </>
+                                             {(failedOrRepaired.length === 0 && passedCount === 0) && (
+                                                <p className="text-slate-500 text-xs italic">No items were marked for this inspection.</p>
+                                            )}
+                                        </div>
                                     );
-                                })()}
+                                })}
                             </div>
                         </section>
-                     )}
+                    )}
                     
                     <footer className="mt-12 pt-8 border-t text-center">
                         <p className="text-sm text-slate-500">Thank you for your business!</p>

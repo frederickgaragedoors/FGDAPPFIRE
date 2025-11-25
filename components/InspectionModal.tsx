@@ -1,42 +1,45 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { XIcon } from './icons.tsx';
-import { InspectionItem, DEFAULT_INSPECTION_ITEMS, InspectionStatus } from '../types.ts';
+import { InspectionItem, DEFAULT_INSPECTION_ITEMS, InspectionStatus, SafetyInspection } from '../types.ts';
 import { generateId } from '../utils.ts';
 
 interface InspectionModalProps {
-    existingInspection?: InspectionItem[];
-    onSave: (inspection: InspectionItem[]) => void;
+    inspection?: SafetyInspection | null;
+    onSave: (inspection: SafetyInspection) => void;
     onClose: () => void;
 }
 
-const InspectionModal: React.FC<InspectionModalProps> = ({ existingInspection, onSave, onClose }) => {
+const InspectionModal: React.FC<InspectionModalProps> = ({ inspection, onSave, onClose }) => {
+    const [name, setName] = useState('');
     const [items, setItems] = useState<InspectionItem[]>([]);
 
     useEffect(() => {
-        if (existingInspection && existingInspection.length > 0) {
-            // Merge existing checks with potentially new default items if the default list has expanded
+        if (inspection) {
+            setName(inspection.name);
+            const existingItems = inspection.items;
+            // Merge existing checks with potentially new default items
             const merged = DEFAULT_INSPECTION_ITEMS.map(defaultName => {
-                const existing = existingInspection.find(i => i.name === defaultName);
+                const existing = existingItems.find(i => i.name === defaultName);
                 if (existing) return existing;
                 return { id: generateId(), name: defaultName, status: 'N/A' as InspectionStatus };
             });
             
-            // Also keep items that might have been renamed or custom added in legacy data (though we don't have custom adding yet)
-            const extraItems = existingInspection.filter(i => !DEFAULT_INSPECTION_ITEMS.includes(i.name));
-            
+            const extraItems = existingItems.filter(i => !DEFAULT_INSPECTION_ITEMS.includes(i.name));
             setItems([...merged, ...extraItems]);
         } else {
-            // Initialize fresh
-            const newItems = DEFAULT_INSPECTION_ITEMS.map(name => ({
+            // Initialize fresh for a new inspection
+            setName('New Inspection');
+            const newItems = DEFAULT_INSPECTION_ITEMS.map(itemName => ({
                 id: generateId(),
-                name: name,
+                name: itemName,
                 status: 'N/A' as InspectionStatus,
                 notes: ''
             }));
             setItems(newItems);
         }
-    }, [existingInspection]);
+    }, [inspection]);
 
     const handleStatusChange = (id: string, status: InspectionStatus) => {
         setItems(prev => prev.map(item => item.id === id ? { ...item, status } : item));
@@ -47,7 +50,11 @@ const InspectionModal: React.FC<InspectionModalProps> = ({ existingInspection, o
     };
 
     const handleSave = () => {
-        onSave(items);
+        onSave({
+            id: inspection?.id || generateId(),
+            name: name || 'Unnamed Inspection',
+            items
+        });
     };
 
     const getStatusColor = (status: InspectionStatus) => {
@@ -64,7 +71,7 @@ const InspectionModal: React.FC<InspectionModalProps> = ({ existingInspection, o
             <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-3xl h-[90vh] flex flex-col">
                 <div className="p-4 border-b dark:border-slate-700 flex justify-between items-center flex-shrink-0">
                     <div>
-                         <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">25-Point Safety Inspection</h2>
+                         <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Safety Inspection</h2>
                          <p className="text-sm text-slate-500 dark:text-slate-400">Document the condition of the garage door system.</p>
                     </div>
                    
@@ -73,10 +80,21 @@ const InspectionModal: React.FC<InspectionModalProps> = ({ existingInspection, o
                     </button>
                 </div>
 
-                <div className="p-4 flex-shrink-0 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 flex justify-end">
+                <div className="p-4 flex-shrink-0 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+                     <div>
+                        <label htmlFor="inspection-name" className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Inspection Name</label>
+                        <input
+                            id="inspection-name"
+                            type="text"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            placeholder="e.g. Main Garage Door"
+                            className="block w-full sm:w-64 px-3 py-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm"
+                        />
+                    </div>
                      <button 
                         onClick={handleMarkAllPass}
-                        className="text-sm text-sky-600 dark:text-sky-400 font-medium hover:text-sky-700 dark:hover:text-sky-300 px-3 py-1 rounded hover:bg-sky-50 dark:hover:bg-sky-900/30 transition-colors"
+                        className="text-sm text-sky-600 dark:text-sky-400 font-medium hover:text-sky-700 dark:hover:text-sky-300 px-3 py-1 rounded hover:bg-sky-50 dark:hover:bg-sky-900/30 transition-colors self-end sm:self-center"
                     >
                         Mark All as Pass
                     </button>

@@ -12,6 +12,9 @@ interface DashboardProps {
 type JobWithContact = JobTicket & {
     contactId: string;
     contactName: string;
+    effectiveDate: Date; // Normalized date for filtering
+    displayDate: Date; // Full date object for display
+    effectiveTime?: string;
 };
 
 const Dashboard: React.FC<DashboardProps> = ({ onViewJobDetail }) => {
@@ -30,23 +33,49 @@ const Dashboard: React.FC<DashboardProps> = ({ onViewJobDetail }) => {
 
     const allJobs = useMemo<JobWithContact[]>(() => {
         return (contacts || []).flatMap(contact => 
-            (contact.jobTickets || []).map(ticket => ({
-                ...ticket,
-                contactId: contact.id,
-                contactName: contact.name
-            }))
+            (contact.jobTickets || []).map(ticket => {
+                const history = ticket.statusHistory && ticket.statusHistory.length > 0
+                    ? [...ticket.statusHistory].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                    : [{ status: ticket.status, timestamp: ticket.createdAt || ticket.date, id: 'fallback' }];
+                
+                const latestStatusEntry = history[0];
+                const timestamp = latestStatusEntry.timestamp;
+                const hasTime = timestamp.includes('T');
+                
+                // Use new Date() to parse the ISO string correctly.
+                // For date-only strings, append T00:00:00 to treat it as local midnight.
+                const displayDate = hasTime ? new Date(timestamp) : new Date(`${timestamp}T00:00:00`);
+
+                let effectiveTime: string | undefined;
+                // Check if the timestamp had a time component
+                if (hasTime) {
+                    const hours = String(displayDate.getHours()).padStart(2, '0');
+                    const minutes = String(displayDate.getMinutes()).padStart(2, '0');
+                    effectiveTime = `${hours}:${minutes}`;
+                } else {
+                    // Fallback to the primary job time if status timestamp is just a date
+                    effectiveTime = ticket.time;
+                }
+
+                // Normalize date part for filtering based on local date
+                const effectiveDate = new Date(displayDate.getFullYear(), displayDate.getMonth(), displayDate.getDate());
+
+                return {
+                    ...ticket,
+                    contactId: contact.id,
+                    contactName: contact.name,
+                    effectiveDate, // The normalized date for filtering
+                    displayDate, // The full date object for display
+                    effectiveTime,
+                };
+            })
         );
     }, [contacts]);
 
-    const parseDateAsLocal = (dateString: string) => {
-        const [year, month, day] = dateString.split('-').map(Number);
-        return new Date(year, month - 1, day);
-    };
-
     const jobsAwaitingParts = useMemo(() => {
         return allJobs
-            .filter(job => job.status === 'Awaiting Parts' && job.date)
-            .sort((a, b) => parseDateAsLocal(a.date).getTime() - parseDateAsLocal(b.date).getTime());
+            .filter(job => job.status === 'Awaiting Parts')
+            .sort((a, b) => a.effectiveDate.getTime() - b.effectiveDate.getTime());
     }, [allJobs]);
     
     const statusOrder: Record<JobStatus, number> = {
@@ -63,10 +92,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onViewJobDetail }) => {
     const todaysJobs = useMemo(() => {
         return allJobs
             .filter(job => {
-                if (!job.date) return false;
-                const jobDate = parseDateAsLocal(job.date);
                 return (job.status === 'Estimate Scheduled' || job.status === 'Scheduled' || job.status === 'In Progress') &&
-                       jobDate.getTime() === today.getTime();
+                       job.effectiveDate.getTime() === today.getTime();
             })
             .sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
     }, [allJobs, today]);
@@ -74,15 +101,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onViewJobDetail }) => {
     const tomorrowsJobs = useMemo(() => {
         return allJobs
             .filter(job => {
-                if (!job.date) return false;
-                const jobDate = parseDateAsLocal(job.date);
                 return (job.status === 'Estimate Scheduled' || job.status === 'Scheduled' || job.status === 'In Progress') &&
-                       jobDate.getTime() === tomorrow.getTime();
+                       job.effectiveDate.getTime() === tomorrow.getTime();
             })
             .sort((a, b) => {
                 // Sort by time, then status
-                const timeA = a.time || '23:59';
-                const timeB = b.time || '23:59';
+                const timeA = a.effectiveTime || '23:59';
+                const timeB = b.effectiveTime || '23:59';
                 if (timeA !== timeB) return timeA.localeCompare(timeB);
                 return statusOrder[a.status] - statusOrder[b.status];
             });
@@ -90,21 +115,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onViewJobDetail }) => {
 
     const quotesToFollowUp = useMemo(() => {
         return allJobs.filter(job => {
-            if (!job.date) return false;
-            const jobDate = parseDateAsLocal(job.date);
-            return job.status === 'Quote Sent' && jobDate.getTime() <= threeDaysAgo.getTime();
-        }).sort((a, b) => parseDateAsLocal(a.date).getTime() - parseDateAsLocal(b.date).getTime());
+            return job.status === 'Quote Sent' && job.effectiveDate.getTime() <= threeDaysAgo.getTime();
+        }).sort((a, b) => a.effectiveDate.getTime() - b.effectiveDate.getTime());
     }, [allJobs, threeDaysAgo]);
 
     const upcomingWork = useMemo(() => {
         return allJobs
             .filter(job => {
-                 if (!job.date) return false;
-                 const jobDate = parseDateAsLocal(job.date);
                  // Filter for jobs strictly AFTER tomorrow
-                 return (job.status === 'Scheduled' || job.status === 'Estimate Scheduled') && jobDate.getTime() > tomorrow.getTime();
+                 return (job.status === 'Scheduled' || job.status === 'Estimate Scheduled') && job.effectiveDate.getTime() > tomorrow.getTime();
             })
-            .sort((a, b) => parseDateAsLocal(a.date).getTime() - parseDateAsLocal(b.date).getTime());
+            .sort((a, b) => a.effectiveDate.getTime() - b.effectiveDate.getTime());
     }, [allJobs, tomorrow]);
 
     const JobCard: React.FC<{ job: JobWithContact }> = ({ job }) => {
@@ -132,8 +153,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onViewJobDetail }) => {
                     <div className="min-w-0">
                         <p className="font-semibold text-slate-800 dark:text-slate-100 truncate">{job.contactName}</p>
                         <p className="text-sm text-slate-500 dark:text-slate-400">
-                            {new Date(job.date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })}
-                            {job.time && <span className="ml-1 text-slate-500 font-normal">at {formatTime(job.time)}</span>}
+                            {job.displayDate.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+                            {job.effectiveTime && <span className="ml-1 text-slate-500 font-normal">at {formatTime(job.effectiveTime)}</span>}
                         </p>
                     </div>
                     <div className="flex flex-col items-end space-y-1">
@@ -178,32 +199,38 @@ const Dashboard: React.FC<DashboardProps> = ({ onViewJobDetail }) => {
             </div>
             <div className="px-4 sm:px-6 py-6 flex-grow">
                 {allJobs.length > 0 ? (
-                    <div className="max-w-4xl mx-auto w-full space-y-8">
-                        <Section 
-                            title="Today's Work" 
-                            jobs={todaysJobs} 
-                            emptyMessage="Nothing scheduled for today." 
-                        />
-                        <Section 
-                            title="Tomorrow's Work" 
-                            jobs={tomorrowsJobs} 
-                            emptyMessage="Nothing scheduled for tomorrow." 
-                        />
-                         <Section 
-                            title="Upcoming Work" 
-                            jobs={upcomingWork} 
-                            emptyMessage="No other upcoming jobs scheduled." 
-                        />
-                        <Section 
-                            title="Awaiting Parts" 
-                            jobs={jobsAwaitingParts} 
-                            emptyMessage="No jobs are awaiting parts." 
-                        />
-                        <Section 
-                            title="Follow-Ups Required" 
-                            jobs={quotesToFollowUp} 
-                            emptyMessage="No quotes need follow-up." 
-                        />
+                    <div className="max-w-7xl mx-auto w-full space-y-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <Section 
+                                title="Today's Work" 
+                                jobs={todaysJobs} 
+                                emptyMessage="Nothing scheduled for today." 
+                            />
+                            <Section 
+                                title="Tomorrow's Work" 
+                                jobs={tomorrowsJobs} 
+                                emptyMessage="Nothing scheduled for tomorrow." 
+                            />
+                        </div>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <Section 
+                                title="Upcoming Work" 
+                                jobs={upcomingWork} 
+                                emptyMessage="No other upcoming jobs scheduled." 
+                            />
+                            <Section 
+                                title="Awaiting Parts" 
+                                jobs={jobsAwaitingParts} 
+                                emptyMessage="No jobs are awaiting parts." 
+                            />
+                        </div>
+                        <div>
+                            <Section 
+                                title="Follow-Ups Required" 
+                                jobs={quotesToFollowUp} 
+                                emptyMessage="No quotes need follow-up." 
+                            />
+                        </div>
                     </div>
                 ) : (
                     <EmptyState 

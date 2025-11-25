@@ -72,7 +72,8 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
     const [isJobTicketModalOpen, setIsJobTicketModalOpen] = useState(false);
     const [editingJobTicket, setEditingJobTicket] = useState<JobTicket | null>(null);
     const [isLoadingFiles, setIsLoadingFiles] = useState(false);
-    const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
+    const [isContactDeleteConfirmOpen, setIsContactDeleteConfirmOpen] = useState(false);
+    const [jobTicketToDeleteId, setJobTicketToDeleteId] = useState<string | null>(null);
 
     const processedParamsRef = useRef<{ date?: string; id?: string }>({});
 
@@ -192,23 +193,38 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
         setEditingJobTicket(null);
     };
     
-    const handleDeleteJobTicket = (id: string) => {
-        if (window.confirm('Are you sure you want to delete this job ticket?')) {
-            const updatedTickets = (contact.jobTickets || []).filter(ticket => ticket.id !== id);
-            handleUpdateContactJobTickets(contact.id, updatedTickets);
-        }
+    const performDeleteJobTicket = () => {
+        if (!jobTicketToDeleteId) return;
+        const updatedTickets = (contact.jobTickets || []).filter(ticket => ticket.id !== jobTicketToDeleteId);
+        handleUpdateContactJobTickets(contact.id, updatedTickets);
+        setJobTicketToDeleteId(null);
     };
 
-    const performDelete = async () => {
+    const performDeleteContact = async () => {
         const success = await handleDeleteContact(contact.id);
         if (success) {
             onClose(); // Navigate away only on successful deletion
         }
-        // No need to close modal here, onConfirm will handle it
+        // Modal is closed by its onConfirm handler
     };
     
     const sortedJobTickets = useMemo(() => {
-        return [...(contact.jobTickets || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        if (!contact.jobTickets) return [];
+        
+        return [...contact.jobTickets]
+            .map(ticket => {
+                const history = ticket.statusHistory && ticket.statusHistory.length > 0
+                    ? [...ticket.statusHistory]
+                    : [{ status: ticket.status, timestamp: ticket.createdAt || ticket.date, id:'fallback'}];
+                
+                // Find the most recent timestamp
+                const latestTimestamp = history.reduce((latest, entry) => {
+                    return new Date(entry.timestamp) > new Date(latest) ? entry.timestamp : latest;
+                }, history[0].timestamp);
+
+                return { ...ticket, latestTimestamp };
+            })
+            .sort((a, b) => new Date(b.latestTimestamp).getTime() - new Date(a.latestTimestamp).getTime());
     }, [contact.jobTickets]);
 
     const normalizedDoorProfiles = useMemo(() => {
@@ -285,7 +301,7 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
                             <EditIcon className="w-4 h-4" />
                             <span>Edit</span>
                         </button>
-                        <button onClick={() => setIsConfirmationModalOpen(true)} className="flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium text-red-600 bg-red-100 dark:bg-red-900/50 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900 transition-colors">
+                        <button onClick={() => setIsContactDeleteConfirmOpen(true)} className="flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium text-red-600 bg-red-100 dark:bg-red-900/50 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900 transition-colors">
                             <TrashIcon className="w-4 h-4" />
                             <span>Delete</span>
                         </button>
@@ -412,6 +428,27 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
                                             const paymentStatusColor = paymentStatusColors[paymentStatus];
                                             const paymentStatusLabel = paymentStatusLabels[paymentStatus];
 
+                                            const history = ticket.statusHistory && ticket.statusHistory.length > 0
+                                                ? [...ticket.statusHistory].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                                                : [{ status: ticket.status, timestamp: ticket.createdAt || ticket.date, id: 'fallback', notes: ticket.notes }];
+
+                                            const latestStatusEntry = history[0];
+                                            const timestamp = latestStatusEntry.timestamp;
+                                            const hasTime = timestamp.includes('T');
+                                            
+                                            const displayDate = hasTime ? new Date(timestamp) : new Date(`${timestamp}T00:00:00`);
+
+                                            let displayTime: string | undefined;
+                                            if (hasTime) {
+                                                const hours = String(displayDate.getHours()).padStart(2, '0');
+                                                const minutes = String(displayDate.getMinutes()).padStart(2, '0');
+                                                displayTime = `${hours}:${minutes}`;
+                                            } else {
+                                                displayTime = ticket.time;
+                                            }
+
+                                            const displayNotes = latestStatusEntry.notes || ticket.notes;
+
                                             return <li 
                                                 key={ticket.id} 
                                                 className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg card-hover cursor-pointer"
@@ -429,12 +466,12 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
                                                     <p className="font-bold text-lg text-slate-800 dark:text-slate-100">{`$${totalCost.toFixed(2)}`}</p>
                                                 </div>
                                                 <p className="font-semibold text-slate-700 dark:text-slate-200">
-                                                    {new Date(ticket.date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })}
-                                                    {ticket.time && <span className="text-slate-500 dark:text-slate-400 font-normal ml-1"> at {formatTime(ticket.time)}</span>}
+                                                    {displayDate.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+                                                    {displayTime && <span className="text-slate-500 dark:text-slate-400 font-normal ml-1"> at {formatTime(displayTime)}</span>}
                                                 </p>
                                                 
-                                                {ticket.notes && (
-                                                    <p className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap break-words mt-3">{ticket.notes}</p>
+                                                {displayNotes && (
+                                                    <p className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap break-words mt-3">{displayNotes}</p>
                                                 )}
                                                 <div className="flex items-center justify-center space-x-2 mt-4 pt-3 border-t border-slate-200 dark:border-slate-600">
                                                     <button
@@ -454,7 +491,7 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
                                                         <span>Edit</span>
                                                     </button>
                                                     <button
-                                                        onClick={(e) => { e.stopPropagation(); handleDeleteJobTicket(ticket.id); }}
+                                                        onClick={(e) => { e.stopPropagation(); setJobTicketToDeleteId(ticket.id); }}
                                                         className="flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium text-red-600 bg-red-100 dark:bg-red-900/50 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900 text-center"
                                                         aria-label="Delete job"
                                                     >
@@ -692,13 +729,22 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
                     apiKey={mapSettings.apiKey}
                 />
             )}
-            {isConfirmationModalOpen && (
+            {isContactDeleteConfirmOpen && (
                 <ConfirmationModal
-                    isOpen={isConfirmationModalOpen}
-                    onClose={() => setIsConfirmationModalOpen(false)}
-                    onConfirm={performDelete}
+                    isOpen={isContactDeleteConfirmOpen}
+                    onClose={() => setIsContactDeleteConfirmOpen(false)}
+                    onConfirm={performDeleteContact}
                     title="Delete Contact"
                     message="Are you sure you want to delete this contact and all associated data? This action cannot be undone."
+                />
+            )}
+            {jobTicketToDeleteId && (
+                <ConfirmationModal
+                    isOpen={!!jobTicketToDeleteId}
+                    onClose={() => setJobTicketToDeleteId(null)}
+                    onConfirm={performDeleteJobTicket}
+                    title="Delete Job Ticket"
+                    message="Are you sure you want to delete this job ticket? This action cannot be undone."
                 />
             )}
         </>

@@ -15,6 +15,13 @@ type JobEvent = JobTicket & {
     contactName: string;
 };
 
+const getLocalDateString = (date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+};
+
 const CalendarView: React.FC<CalendarViewProps> = ({ onViewJob, onAddJob }) => {
     const { contacts } = useData();
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -25,11 +32,36 @@ const CalendarView: React.FC<CalendarViewProps> = ({ onViewJob, onAddJob }) => {
 
     const allJobs = useMemo<JobEvent[]>(() => {
         return (contacts || []).flatMap(contact => 
-            (contact.jobTickets || []).map(ticket => ({
-                ...ticket,
-                contactId: contact.id,
-                contactName: contact.name
-            }))
+            (contact.jobTickets || []).map(ticket => {
+                const history = ticket.statusHistory && ticket.statusHistory.length > 0
+                    ? [...ticket.statusHistory].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                    : [{ status: ticket.status, timestamp: ticket.createdAt || ticket.date, id: 'fallback' }];
+                
+                const latestStatusEntry = history[0];
+                const timestamp = latestStatusEntry.timestamp;
+                const hasTime = timestamp.includes('T');
+                
+                const displayDate = hasTime ? new Date(timestamp) : new Date(`${timestamp}T00:00:00`);
+
+                let effectiveTime: string | undefined;
+                if (hasTime) {
+                    const hours = String(displayDate.getHours()).padStart(2, '0');
+                    const minutes = String(displayDate.getMinutes()).padStart(2, '0');
+                    effectiveTime = `${hours}:${minutes}`;
+                } else {
+                    effectiveTime = ticket.time;
+                }
+                
+                const localDateString = getLocalDateString(displayDate);
+
+                return {
+                    ...ticket,
+                    contactId: contact.id,
+                    contactName: contact.name,
+                    date: localDateString, 
+                    time: effectiveTime, 
+                };
+            })
         );
     }, [contacts]);
 
@@ -64,13 +96,6 @@ const CalendarView: React.FC<CalendarViewProps> = ({ onViewJob, onAddJob }) => {
     }, [year, month, startingDay, daysInMonth]);
     
     const weeksCount = Math.ceil(calendarDays.length / 7);
-
-    const getLocalDateString = (date: Date) => {
-        const y = date.getFullYear();
-        const m = String(date.getMonth() + 1).padStart(2, '0');
-        const d = String(date.getDate()).padStart(2, '0');
-        return `${y}-${m}-${d}`;
-    };
 
     const selectedDateString = getLocalDateString(selectedDate);
     const selectedDateJobs = jobsByDate[selectedDateString] || [];
@@ -156,7 +181,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ onViewJob, onAddJob }) => {
                                         <div className="hidden md:flex flex-col gap-1">
                                             {jobs.slice(0, 4).map(job => (
                                                 <div key={job.id} className={`text-[10px] px-1.5 py-0.5 rounded truncate border border-opacity-10 ${jobStatusColors[job.status].base} ${jobStatusColors[job.status].text}`}>
-                                                     <span className="font-semibold mr-1">{job.time || ''}</span>
+                                                     <span className="font-semibold mr-1">{job.time ? formatTime(job.time) : ''}</span>
                                                      {job.contactName}
                                                 </div>
                                             ))}

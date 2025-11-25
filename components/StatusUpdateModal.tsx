@@ -38,7 +38,7 @@ const StatusUpdateModal: React.FC<StatusUpdateModalProps> = ({ entry, onSave, on
       status,
       timestamp: new Date(timestamp).toISOString(),
       notes,
-      duration: (duration !== '' && duration !== null) ? Number(duration) : 60,
+      duration: (duration !== '' && duration !== null) ? Number(duration) : undefined,
     });
   };
 
