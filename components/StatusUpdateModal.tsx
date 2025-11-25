@@ -33,13 +33,19 @@ const StatusUpdateModal: React.FC<StatusUpdateModalProps> = ({ entry, onSave, on
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({
-      id: entry?.id,
-      status,
-      timestamp: new Date(timestamp).toISOString(),
-      notes,
-      duration: (duration !== '' && duration !== null) ? Number(duration) : undefined,
-    });
+    
+    const entryToSave: Omit<StatusHistoryEntry, 'id'> & { id?: string } = {
+        id: entry?.id,
+        status,
+        timestamp: new Date(timestamp).toISOString(),
+        notes,
+    };
+
+    if (duration !== '' && duration !== null && !isNaN(Number(duration))) {
+        entryToSave.duration = Number(duration);
+    }
+    
+    onSave(entryToSave);
   };
 
   const visibleStatuses = ALL_JOB_STATUSES.filter(s => 
