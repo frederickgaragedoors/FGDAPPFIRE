@@ -216,13 +216,14 @@ export const generatePdf = async ({ contact, ticket, businessInfo, docType }: Ge
         body: tableRows, 
         theme: 'plain',
         headStyles: { 
-            fillColor: false,
+            fillColor: [255, 255, 255],
             textColor: [71, 85, 105], 
             fontStyle: 'bold',
             lineWidth: { bottom: 1.5 },
             lineColor: [226, 232, 240]
         },
         styles: { 
+            fillColor: [255, 255, 255],
             fontSize: 10, 
             cellPadding: 8, 
             lineColor: [226, 232, 240], 
@@ -415,7 +416,13 @@ export const generatePdf = async ({ contact, ticket, businessInfo, docType }: Ge
                 body: failedOrRepaired.map(item => [item.name, item.status || 'N/A', item.notes || '']),
                 theme: 'plain',
                 headStyles: { fillColor: [254, 242, 242], textColor: [153, 27, 27], fontStyle: 'bold' },
-                styles: { fontSize: 9, cellPadding: 4, lineColor: [200, 200, 200], lineWidth: 0.5 },
+                styles: { 
+                    fillColor: [255, 255, 255],
+                    fontSize: 9, 
+                    cellPadding: 4, 
+                    lineColor: [200, 200, 200], 
+                    lineWidth: 0.5 
+                },
                 columnStyles: { 0: { cellWidth: 120 }, 1: { cellWidth: 60, fontStyle: 'bold' }, 2: { cellWidth: 'auto' } }
             });
             yPos = (doc as any).lastAutoTable.finalY + 15;
