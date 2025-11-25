@@ -171,7 +171,6 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
           status: statusHistory[0]?.status || 'Scheduled', // Get status from the newest entry
           timestamp: now.toISOString(),
           notes: '',
-          duration: undefined
       };
       // Add new entry and re-sort descending to ensure it's at the top.
       setStatusHistory(prev => [...prev, newEntry].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
@@ -241,16 +240,21 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
 
     const latestStatus = sortedHistory[0].status;
 
-    const ticketToSave = {
+    const finalStatusHistory = sortedHistory.map(h => {
+        const cleanEntry: Partial<StatusHistoryEntry> = { ...h };
+        if (cleanEntry.duration === undefined || cleanEntry.duration === null || cleanEntry.duration === '' || isNaN(Number(cleanEntry.duration))) {
+            delete cleanEntry.duration;
+        } else {
+            cleanEntry.duration = Number(cleanEntry.duration);
+        }
+        return cleanEntry as StatusHistoryEntry;
+    });
+
+    const ticketToSave: Omit<JobTicket, 'id'> & { id?: string } = {
         id: entry?.id,
         date,
-        time: time || undefined,
-        duration: (duration !== '' && duration !== null) ? Number(duration) : 60,
-        jobLocation,
-        jobLocationContactName,
-        jobLocationContactPhone,
         status: latestStatus,
-        statusHistory: sortedHistory,
+        statusHistory: finalStatusHistory,
         paymentStatus,
         notes,
         parts,
@@ -260,6 +264,19 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
         deposit: Number(deposit || 0),
         createdAt: entry?.createdAt,
     };
+
+    // Conditionally add optional top-level fields
+    if (time) ticketToSave.time = time;
+    if (jobLocation) ticketToSave.jobLocation = jobLocation;
+    if (jobLocationContactName) ticketToSave.jobLocationContactName = jobLocationContactName;
+    if (jobLocationContactPhone) ticketToSave.jobLocationContactPhone = jobLocationContactPhone;
+
+    if (duration !== '' && duration !== null && !isNaN(Number(duration))) {
+        ticketToSave.duration = Number(duration);
+    } else if (!entry?.id) { // Only default on new jobs
+        ticketToSave.duration = 60;
+    }
+
     onSave(ticketToSave);
   };
 
