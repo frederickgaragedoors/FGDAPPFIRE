@@ -3,6 +3,7 @@
 
 
 
+
 export interface FileAttachment {
   id: string;
   name: string;
@@ -148,6 +149,8 @@ export interface Contact {
   customFields: CustomField[];
   jobTickets: JobTicket[];
   doorProfiles?: DoorProfile[];
+  lastModified: string; // ISO string
+  isPinned?: boolean;
 }
 
 export interface BusinessInfo {
