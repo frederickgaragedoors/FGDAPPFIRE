@@ -141,11 +141,26 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
   };
 
   const handleHistoryChange = (id: string, field: keyof StatusHistoryEntry, value: string | number | undefined) => {
-    const processedValue = (field === 'timestamp') 
-        ? new Date(value as string).toISOString() 
-        : (field === 'duration' ? (value !== '' ? Number(value) : undefined) : value);
-
-    setStatusHistory(prev => prev.map(item => item.id === id ? { ...item, [field]: processedValue } : item));
+    setStatusHistory(prev => prev.map(item => {
+        if (item.id === id) {
+            const updatedItem = { ...item };
+            if (field === 'timestamp') {
+                updatedItem.timestamp = new Date(value as string).toISOString();
+            } else if (field === 'duration') {
+                const numValue = (value !== '' && value != null) ? Number(value) : undefined;
+                if (numValue === undefined || isNaN(numValue)) {
+                    delete updatedItem.duration; // Remove the key if value is empty/invalid
+                } else {
+                    updatedItem.duration = numValue;
+                }
+            } else {
+                // For status and notes
+                (updatedItem as any)[field] = value;
+            }
+            return updatedItem;
+        }
+        return item;
+    }));
   };
 
   const addHistoryEntry = () => {
@@ -230,7 +245,7 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
         id: entry?.id,
         date,
         time: time || undefined,
-        duration: (duration !== '' && duration !== null) ? Number(duration) : undefined,
+        duration: (duration !== '' && duration !== null) ? Number(duration) : 60,
         jobLocation,
         jobLocationContactName,
         jobLocationContactPhone,
