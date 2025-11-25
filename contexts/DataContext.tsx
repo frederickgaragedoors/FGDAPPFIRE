@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo, ReactNo
 import { FirebaseUser as User, auth, db, storage } from '../firebase.ts';
 import { collection, doc, onSnapshot, setDoc, deleteDoc, updateDoc, QuerySnapshot, DocumentData, DocumentSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { Contact, ViewState, DefaultFieldSetting, BusinessInfo, JobTemplate, JobStatus, ALL_JOB_STATUSES, JobTicket, FileAttachment, EmailSettings, DEFAULT_EMAIL_SETTINGS, CatalogItem, MapSettings, Theme } from '../types.ts';
+import { Contact, ViewState, DefaultFieldSetting, BusinessInfo, JobTemplate, JobStatus, ALL_JOB_STATUSES, JobTicket, FileAttachment, EmailSettings, DEFAULT_EMAIL_SETTINGS, CatalogItem, MapSettings, Theme, StatusHistoryEntry } from '../types.ts';
 import { generateId } from '../utils.ts';
 import { generateDemoContacts } from '../demoData.ts';
 import * as idb from '../db.ts';
@@ -36,6 +36,8 @@ interface DataContextType {
     handleDeleteContact: (id: string) => Promise<boolean>;
     handleAddFilesToContact: (contactId: string, newFiles: FileAttachment[], newFileObjects: { [id: string]: File }) => Promise<void>;
     handleUpdateContactJobTickets: (contactId: string, ticketOrTickets: JobTicket | JobTicket[] | (Omit<JobTicket, "id"> & { id?: string })) => Promise<void>;
+    handleSaveStatusHistoryEntry: (contactId: string, ticketId: string, entry: Omit<StatusHistoryEntry, 'id'> & { id?: string }) => void;
+    handleDeleteStatusHistoryEntry: (contactId: string, ticketId: string, entryId: string) => void;
     saveSettings: (updates: any) => Promise<void>;
     loadDemoData: () => Promise<void>;
     onSwitchToCloud: () => void;
@@ -328,26 +330,41 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
             return;
         }
         
-        let updatedTickets: JobTicket[];
+        let finalTickets: JobTicket[];
         
         if (Array.isArray(ticketOrTickets)) {
-            updatedTickets = ticketOrTickets;
+            // This case handles direct array replacement, like deleting a ticket
+            finalTickets = ticketOrTickets;
         } else {
-             const entry = ticketOrTickets;
-             const currentTickets = contact.jobTickets || [];
-             if (entry.id && currentTickets.some(t => t.id === entry.id)) {
-                 updatedTickets = currentTickets.map(ticket => ticket.id === entry.id ? { ...ticket, ...entry } as JobTicket : ticket);
-             } else {
-                 const newTicket: JobTicket = { 
-                     ...entry, 
-                     id: entry.id || generateId(),
-                     createdAt: entry.createdAt || new Date().toISOString() 
-                 } as JobTicket;
-                 updatedTickets = [newTicket, ...currentTickets];
-             }
+            const entry = ticketOrTickets;
+            const currentTickets = contact.jobTickets || [];
+            const isNewTicket = !entry.id || !currentTickets.some(t => t.id === entry.id);
+
+            if (isNewTicket) {
+                const ticketDate = entry.date;
+                const ticketTime = entry.time || '00:00';
+                const initialTimestamp = new Date(`${ticketDate}T${ticketTime}`).toISOString();
+
+                const newTicket: JobTicket = {
+                    ...(entry as Omit<JobTicket, "id">),
+                    id: entry.id || generateId(),
+                    createdAt: entry.createdAt || new Date().toISOString(),
+                    statusHistory: entry.statusHistory || [{ 
+                        id: generateId(), 
+                        status: entry.status, 
+                        timestamp: initialTimestamp,
+                        duration: entry.duration || 60,
+                    }],
+                };
+                finalTickets = [newTicket, ...currentTickets];
+            } else {
+                finalTickets = currentTickets.map(ticket => 
+                    ticket.id === entry.id ? { ...ticket, ...entry } as JobTicket : ticket
+                );
+            }
         }
         
-        const updatedContact = { ...contact, jobTickets: updatedTickets };
+        const updatedContact = { ...contact, jobTickets: finalTickets };
 
         if (isGuestMode) {
             const updatedContacts = contacts.map(c => c.id === contactId ? updatedContact : c);
@@ -360,14 +377,77 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
         const contactRef = doc(db, 'users', user.uid, 'contacts', contactId);
         
         try {
-            // Use setDoc to overwrite the entire document. This is more robust for PWA offline mode,
-            // especially on mobile, as it avoids complex array merging logic that can fail with `updateDoc`.
             await setDoc(contactRef, updatedContact);
         } catch (error) {
             console.error("Failed to update job tickets in cloud:", error);
             alert(`Failed to save job. Error: ${error instanceof Error ? error.message : String(error)}`);
         }
     };
+    
+    const handleSaveStatusHistoryEntry = (contactId: string, ticketId: string, entry: Omit<StatusHistoryEntry, 'id'> & { id?: string }) => {
+        const contact = contacts.find(c => c.id === contactId);
+        if (!contact) return;
+        const ticket = contact.jobTickets.find(t => t.id === ticketId);
+        if (!ticket) return;
+
+        let history = ticket.statusHistory || [];
+        if(entry.id) { // Editing existing
+            history = history.map(h => h.id === entry.id ? { ...h, ...entry } as StatusHistoryEntry : h);
+        } else { // Adding new
+            history.push({ ...entry, id: generateId() } as StatusHistoryEntry);
+        }
+
+        // Sort history to find the latest entry and update the parent ticket
+        const sortedHistory = [...history].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        const latestEntry = sortedHistory[0];
+        
+        let updatedTicket = { ...ticket };
+
+        if (latestEntry) {
+            const latestTimestamp = new Date(latestEntry.timestamp);
+            
+            const year = latestTimestamp.getFullYear();
+            const month = String(latestTimestamp.getMonth() + 1).padStart(2, '0');
+            const day = String(latestTimestamp.getDate()).padStart(2, '0');
+            const hours = String(latestTimestamp.getHours()).padStart(2, '0');
+            const minutes = String(latestTimestamp.getMinutes()).padStart(2, '0');
+    
+            const date = `${year}-${month}-${day}`;
+            const time = `${hours}:${minutes}`;
+
+            updatedTicket = {
+                ...updatedTicket,
+                status: latestEntry.status,
+                date: date,
+                time: time,
+                duration: latestEntry.duration,
+                statusHistory: sortedHistory,
+            };
+        } else {
+             updatedTicket = {
+                ...updatedTicket,
+                statusHistory: sortedHistory,
+            };
+        }
+
+        handleUpdateContactJobTickets(contactId, updatedTicket);
+    };
+
+    const handleDeleteStatusHistoryEntry = (contactId: string, ticketId: string, entryId: string) => {
+        const contact = contacts.find(c => c.id === contactId);
+        if (!contact) return;
+        const ticket = contact.jobTickets.find(t => t.id === ticketId);
+        if (!ticket || !ticket.statusHistory) return;
+
+        const history = ticket.statusHistory.filter(h => h.id !== entryId);
+        
+        // After deleting, make sure the main ticket status is still correct
+        const sortedHistory = [...history].sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        const latestStatus = sortedHistory[0]?.status || ticket.status;
+
+        handleUpdateContactJobTickets(contactId, { ...ticket, status: latestStatus, statusHistory: history });
+    };
+
 
     const saveSettings = async (updates: any) => {
         if (isGuestMode) {
@@ -494,6 +574,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
         handleDeleteContact,
         handleAddFilesToContact,
         handleUpdateContactJobTickets,
+        handleSaveStatusHistoryEntry,
+        handleDeleteStatusHistoryEntry,
         saveSettings,
         loadDemoData,
         onSwitchToCloud,
