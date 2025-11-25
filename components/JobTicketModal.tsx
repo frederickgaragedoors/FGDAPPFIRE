@@ -242,7 +242,9 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
 
     const finalStatusHistory = sortedHistory.map(h => {
         const cleanEntry: Partial<StatusHistoryEntry> = { ...h };
-        if (cleanEntry.duration === undefined || cleanEntry.duration === null || cleanEntry.duration === '' || isNaN(Number(cleanEntry.duration))) {
+        // FIX: The `duration` property is `number | undefined` and cannot be an empty string.
+        // This comparison was causing a TypeScript error.
+        if (cleanEntry.duration === undefined || cleanEntry.duration === null || isNaN(Number(cleanEntry.duration))) {
             delete cleanEntry.duration;
         } else {
             cleanEntry.duration = Number(cleanEntry.duration);
