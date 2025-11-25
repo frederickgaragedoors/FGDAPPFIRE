@@ -35,9 +35,7 @@ interface DataContextType {
     handleSaveContact: (contactData: Omit<Contact, 'id'> & { id?: string }, newFileObjects: { [id: string]: File }) => Promise<void>;
     handleDeleteContact: (id: string) => Promise<boolean>;
     handleAddFilesToContact: (contactId: string, newFiles: FileAttachment[], newFileObjects: { [id: string]: File }) => Promise<void>;
-    handleUpdateContactJobTickets: (contactId: string, ticketOrTickets: JobTicket | JobTicket[] | (Omit<JobTicket, "id"> & { id?: string })) => Promise<void>;
-    handleSaveStatusHistoryEntry: (contactId: string, ticketId: string, entry: Omit<StatusHistoryEntry, 'id'> & { id?: string }) => void;
-    handleDeleteStatusHistoryEntry: (contactId: string, ticketId: string, entryId: string) => void;
+    handleUpdateContactJobTickets: (contactId: string, ticketDataOrArray: (Omit<JobTicket, "id"> & { id?: string }) | JobTicket[]) => Promise<void>;
     saveSettings: (updates: any) => Promise<void>;
     loadDemoData: () => Promise<void>;
     onSwitchToCloud: () => void;
@@ -323,7 +321,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
         }
     };
 
-    const handleUpdateContactJobTickets = async (contactId: string, ticketOrTickets: JobTicket | JobTicket[] | (Omit<JobTicket, "id"> & { id?: string })) => {
+    const handleUpdateContactJobTickets = async (contactId: string, ticketDataOrArray: (Omit<JobTicket, "id"> & { id?: string }) | JobTicket[]) => {
         const contact = contacts.find(c => c.id === contactId);
         if (!contact) {
             console.error("Contact not found for job ticket update");
@@ -331,36 +329,25 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
         }
         
         let finalTickets: JobTicket[];
-        
-        if (Array.isArray(ticketOrTickets)) {
+
+        if (Array.isArray(ticketDataOrArray)) {
             // This case handles direct array replacement, like deleting a ticket
-            finalTickets = ticketOrTickets;
+            finalTickets = ticketDataOrArray;
         } else {
-            const entry = ticketOrTickets;
-            const currentTickets = contact.jobTickets || [];
-            const isNewTicket = !entry.id || !currentTickets.some(t => t.id === entry.id);
-
-            if (isNewTicket) {
-                const ticketDate = entry.date;
-                const ticketTime = entry.time || '00:00';
-                const initialTimestamp = new Date(`${ticketDate}T${ticketTime}`).toISOString();
-
-                const newTicket: JobTicket = {
-                    ...(entry as Omit<JobTicket, "id">),
-                    id: entry.id || generateId(),
-                    createdAt: entry.createdAt || new Date().toISOString(),
-                    statusHistory: entry.statusHistory || [{ 
-                        id: generateId(), 
-                        status: entry.status, 
-                        timestamp: initialTimestamp,
-                        duration: entry.duration || 60,
-                    }],
-                };
-                finalTickets = [newTicket, ...currentTickets];
+            const ticketData = ticketDataOrArray;
+            const existingTickets = contact.jobTickets || [];
+            
+            if (ticketData.id && existingTickets.some(t => t.id === ticketData.id)) {
+                // Update
+                finalTickets = existingTickets.map(t => t.id === ticketData.id ? (ticketData as JobTicket) : t);
             } else {
-                finalTickets = currentTickets.map(ticket => 
-                    ticket.id === entry.id ? { ...ticket, ...entry } as JobTicket : ticket
-                );
+                // Add new
+                const newTicket: JobTicket = {
+                    ...(ticketData as Omit<JobTicket, "id">),
+                    id: generateId(),
+                    createdAt: ticketData.createdAt || new Date().toISOString(),
+                };
+                finalTickets = [newTicket, ...existingTickets];
             }
         }
         
@@ -383,71 +370,6 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
             alert(`Failed to save job. Error: ${error instanceof Error ? error.message : String(error)}`);
         }
     };
-    
-    const handleSaveStatusHistoryEntry = (contactId: string, ticketId: string, entry: Omit<StatusHistoryEntry, 'id'> & { id?: string }) => {
-        const contact = contacts.find(c => c.id === contactId);
-        if (!contact) return;
-        const ticket = contact.jobTickets.find(t => t.id === ticketId);
-        if (!ticket) return;
-
-        let history = ticket.statusHistory || [];
-        if(entry.id) { // Editing existing
-            history = history.map(h => h.id === entry.id ? { ...h, ...entry } as StatusHistoryEntry : h);
-        } else { // Adding new
-            history.push({ ...entry, id: generateId() } as StatusHistoryEntry);
-        }
-
-        // Sort history to find the latest entry and update the parent ticket
-        const sortedHistory = [...history].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-        const latestEntry = sortedHistory[0];
-        
-        let updatedTicket = { ...ticket };
-
-        if (latestEntry) {
-            const latestTimestamp = new Date(latestEntry.timestamp);
-            
-            const year = latestTimestamp.getFullYear();
-            const month = String(latestTimestamp.getMonth() + 1).padStart(2, '0');
-            const day = String(latestTimestamp.getDate()).padStart(2, '0');
-            const hours = String(latestTimestamp.getHours()).padStart(2, '0');
-            const minutes = String(latestTimestamp.getMinutes()).padStart(2, '0');
-    
-            const date = `${year}-${month}-${day}`;
-            const time = `${hours}:${minutes}`;
-
-            updatedTicket = {
-                ...updatedTicket,
-                status: latestEntry.status,
-                date: date,
-                time: time,
-                duration: latestEntry.duration,
-                statusHistory: sortedHistory,
-            };
-        } else {
-             updatedTicket = {
-                ...updatedTicket,
-                statusHistory: sortedHistory,
-            };
-        }
-
-        handleUpdateContactJobTickets(contactId, updatedTicket);
-    };
-
-    const handleDeleteStatusHistoryEntry = (contactId: string, ticketId: string, entryId: string) => {
-        const contact = contacts.find(c => c.id === contactId);
-        if (!contact) return;
-        const ticket = contact.jobTickets.find(t => t.id === ticketId);
-        if (!ticket || !ticket.statusHistory) return;
-
-        const history = ticket.statusHistory.filter(h => h.id !== entryId);
-        
-        // After deleting, make sure the main ticket status is still correct
-        const sortedHistory = [...history].sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-        const latestStatus = sortedHistory[0]?.status || ticket.status;
-
-        handleUpdateContactJobTickets(contactId, { ...ticket, status: latestStatus, statusHistory: history });
-    };
-
 
     const saveSettings = async (updates: any) => {
         if (isGuestMode) {
@@ -574,8 +496,6 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
         handleDeleteContact,
         handleAddFilesToContact,
         handleUpdateContactJobTickets,
-        handleSaveStatusHistoryEntry,
-        handleDeleteStatusHistoryEntry,
         saveSettings,
         loadDemoData,
         onSwitchToCloud,
