@@ -34,6 +34,7 @@ const createJob = (
 };
 
 export const generateDemoContacts = (): Contact[] => {
+    const now = new Date();
     const contacts: Contact[] = [
         {
             id: generateId(),
@@ -61,7 +62,8 @@ export const generateDemoContacts = (): Contact[] => {
             jobTickets: [
                 createJob('Paid', -5, "Replaced both torsion springs. Tuned and lubed door.", 350, 'paid_in_full'),
                 createJob('Scheduled', 2, "Annual Maintenance Check", 89, 'unpaid')
-            ]
+            ],
+            lastModified: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString(),
         },
         {
             id: generateId(),
@@ -88,7 +90,8 @@ export const generateDemoContacts = (): Contact[] => {
             ],
             jobTickets: [
                 createJob('In Progress', 0, "Door stuck open. diagnosing opener issue.", 0, 'unpaid')
-            ]
+            ],
+            lastModified: now.toISOString(),
         },
         {
             id: generateId(),
@@ -102,7 +105,8 @@ export const generateDemoContacts = (): Contact[] => {
             doorProfiles: [],
             jobTickets: [
                 createJob('Quote Sent', -2, "Estimate for new garage door installation (Sandstone, Insulated).", 1800, 'unpaid')
-            ]
+            ],
+            lastModified: new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString(),
         },
         {
             id: generateId(),
@@ -129,7 +133,8 @@ export const generateDemoContacts = (): Contact[] => {
             ],
             jobTickets: [
                 createJob('Completed', -30, "Replaced safety sensors.", 150, 'paid_in_full')
-            ]
+            ],
+            lastModified: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(),
         },
         {
             id: generateId(),
@@ -141,7 +146,8 @@ export const generateDemoContacts = (): Contact[] => {
             files: [],
             customFields: [],
             doorProfiles: [],
-            jobTickets: [] // New lead
+            jobTickets: [], // New lead
+            lastModified: new Date(now.getTime() - 10 * 60 * 1000).toISOString(),
         }
     ];
 
