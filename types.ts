@@ -2,6 +2,7 @@
 
 
 
+
 export interface FileAttachment {
   id: string;
   name: string;
@@ -84,6 +85,12 @@ export interface InspectionItem {
     notes?: string;
 }
 
+export interface SafetyInspection {
+  id: string;
+  name: string;
+  items: InspectionItem[];
+}
+
 export interface StatusHistoryEntry {
   id: string;
   status: JobStatus;
@@ -110,7 +117,8 @@ export interface JobTicket {
   salesTaxRate?: number;
   processingFeeRate?: number;
   deposit?: number;
-  inspection?: InspectionItem[];
+  inspection?: InspectionItem[]; // Legacy: single inspection
+  inspections?: SafetyInspection[]; // New: multiple inspections
 }
 
 export interface JobTemplate {
