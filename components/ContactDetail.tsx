@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Contact, FileAttachment, JobTicket, jobStatusColors, paymentStatusColors, paymentStatusLabels } from '../types.ts';
 import { useData } from '../contexts/DataContext.tsx';
@@ -21,6 +22,8 @@ import {
   BriefcaseIcon,
   ClipboardListIcon,
   HomeIcon,
+  PinIcon,
+  PinSolidIcon,
 } from './icons.tsx';
 import { fileToDataUrl, formatFileSize, getInitials, generateId, calculateJobTicketTotal, formatTime } from '../utils.ts';
 
@@ -57,6 +60,7 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
         handleAddFilesToContact,
         handleUpdateContactJobTickets,
         handleDeleteContact,
+        handleTogglePinContact,
         jobTemplates,
         partsCatalog,
         enabledStatuses,
@@ -296,6 +300,10 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
                         >
                             <BriefcaseIcon className="w-4 h-4" />
                             <span>Add Job</span>
+                        </button>
+                        <button onClick={() => handleTogglePinContact(contact.id)} className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${contact.isPinned ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900' : 'bg-slate-200 text-slate-600 dark:bg-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-500'}`}>
+                            {contact.isPinned ? <PinSolidIcon className="w-4 h-4" /> : <PinIcon className="w-4 h-4" />}
+                            <span>{contact.isPinned ? 'Unpin' : 'Pin'}</span>
                         </button>
                         <button onClick={onEdit} className="flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors">
                             <EditIcon className="w-4 h-4" />

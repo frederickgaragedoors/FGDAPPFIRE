@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useMemo } from 'react';
 import { useData } from '../contexts/DataContext.tsx';
 import ContactListItem from './ContactListItem.tsx';
 import { SearchIcon } from './icons.tsx';
@@ -28,22 +29,36 @@ const ContactList: React.FC<ContactListProps> = ({
     };
   }, [searchQuery]);
 
-  const filteredContacts = (contacts || []).filter(contact => {
-    const query = debouncedQuery.toLowerCase();
-    if (!query) return true;
-    
-    const hasMatchingJobTicket = (contact.jobTickets || []).some(ticket =>
-      ticket.id.toLowerCase().includes(query)
-    );
+  const sortedAndFilteredContacts = useMemo(() => {
+    const sorted = (contacts || []).slice().sort((a, b) => {
+        // Pinned items first
+        if (a.isPinned && !b.isPinned) return -1;
+        if (!a.isPinned && b.isPinned) return 1;
 
-    return (
-      contact.name.toLowerCase().includes(query) ||
-      (contact.email && contact.email.toLowerCase().includes(query)) ||
-      (contact.phone && contact.phone.toLowerCase().includes(query)) ||
-      (contact.address && contact.address.toLowerCase().includes(query)) ||
-      hasMatchingJobTicket
-    );
-  });
+        // Then sort by lastModified date, descending
+        const dateA = new Date(a.lastModified || 0).getTime();
+        const dateB = new Date(b.lastModified || 0).getTime();
+        return dateB - dateA;
+    });
+
+    const query = debouncedQuery.toLowerCase();
+    if (!query) return sorted;
+
+    return sorted.filter(contact => {
+        const hasMatchingJobTicket = (contact.jobTickets || []).some(ticket =>
+            ticket.id.toLowerCase().includes(query)
+        );
+
+        return (
+            contact.name.toLowerCase().includes(query) ||
+            (contact.email && contact.email.toLowerCase().includes(query)) ||
+            (contact.phone && contact.phone.toLowerCase().includes(query)) ||
+            (contact.address && contact.address.toLowerCase().includes(query)) ||
+            hasMatchingJobTicket
+        );
+    });
+  }, [contacts, debouncedQuery]);
+
 
   return (
     <div className="h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 flex flex-col">
@@ -62,8 +77,8 @@ const ContactList: React.FC<ContactListProps> = ({
         </div>
       </div>
       <ul className="overflow-y-auto flex-grow divide-y divide-slate-100 dark:divide-slate-700/50">
-        {filteredContacts.length > 0 ? (
-          filteredContacts.map((contact, index) => (
+        {sortedAndFilteredContacts.length > 0 ? (
+          sortedAndFilteredContacts.map((contact, index) => (
             <ContactListItem
               key={contact.id}
               contact={contact}

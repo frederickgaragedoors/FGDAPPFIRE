@@ -1,8 +1,9 @@
 
+
 import React from 'react';
 import { Contact } from '../types.ts';
 import { getInitials } from '../utils.ts';
-import { BriefcaseIcon, PlusIcon } from './icons.tsx';
+import { BriefcaseIcon, PlusIcon, PinSolidIcon } from './icons.tsx';
 
 interface ContactListItemProps {
   contact: Contact;
@@ -52,9 +53,12 @@ const ContactListItem: React.FC<ContactListItemProps> = ({ contact, isSelected, 
       </div>
       <div className="ml-4 min-w-0 flex-grow">
         <div className="flex justify-between items-baseline">
-             <p className={`font-semibold text-base truncate ${isSelected ? 'text-sky-900 dark:text-sky-100' : 'text-slate-800 dark:text-slate-200'}`}>
-              {contact.name}
-            </p>
+            <div className="flex items-center min-w-0">
+                {contact.isPinned && <PinSolidIcon className="w-4 h-4 text-slate-400 dark:text-slate-500 mr-2 flex-shrink-0" />}
+                <p className={`font-semibold text-base truncate ${isSelected ? 'text-sky-900 dark:text-sky-100' : 'text-slate-800 dark:text-slate-200'}`}>
+                {contact.name}
+                </p>
+            </div>
             {contact.jobTickets && contact.jobTickets.length > 0 && (
                  <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${isSelected ? 'bg-sky-200 text-sky-800 dark:bg-sky-800 dark:text-sky-200' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400'}`}>
                     {contact.jobTickets.length} Job{contact.jobTickets.length !== 1 && 's'}
