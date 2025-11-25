@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Contact, JobTicket, BusinessInfo } from '../types.ts';
+import { Contact, JobTicket, BusinessInfo, SafetyInspection } from '../types.ts';
 import { calculateJobTicketTotal, formatPhoneNumber } from '../utils.ts';
 
 type DocType = 'receipt' | 'estimate';
@@ -64,7 +64,13 @@ export const generatePdf = async ({ contact, ticket, businessInfo, docType }: Ge
         else displayTitle = 'INVOICE';
     }
 
-    const hasInspectionResults = (ticket.inspection || []).some(i => ['Pass', 'Fail', 'Repaired'].includes(i.status || ''));
+    const allInspections: SafetyInspection[] = ticket.inspections && ticket.inspections.length > 0 
+        ? ticket.inspections 
+        : (ticket.inspection && ticket.inspection.length > 0 ? [{ id: 'legacy', name: 'Safety Inspection', items: ticket.inspection }] : []);
+
+    const hasInspectionResults = allInspections.some(inspection =>
+        inspection.items.some(i => ['Pass', 'Fail', 'Repaired'].includes(i.status || 'N/A'))
+    );
     
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -400,40 +406,62 @@ export const generatePdf = async ({ contact, ticket, businessInfo, docType }: Ge
     // --- Inspection Summary ---
     if (hasInspectionResults) {
         yPos = checkAndAddPage(yPos, 150);
+        yPos += 10;
+        doc.setDrawColor(220);
+        doc.line(margin, yPos, pageWidth - margin, yPos);
+        yPos += 20;
+
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0);
-        doc.text("25-POINT SAFETY INSPECTION", margin, yPos);
-        yPos += 15;
-        
-        const failedOrRepaired = (ticket.inspection || []).filter(i => i.status === 'Fail' || i.status === 'Repaired');
-        const passedCount = (ticket.inspection || []).filter(i => i.status === 'Pass').length;
+        doc.text("SAFETY INSPECTION SUMMARY", margin, yPos);
+        yPos += 20;
 
-        if (failedOrRepaired.length > 0) {
-            autoTable(doc, {
-                startY: yPos + 5,
-                head: [["Item", "Status", "Notes"]],
-                body: failedOrRepaired.map(item => [item.name, item.status || 'N/A', item.notes || '']),
-                theme: 'plain',
-                headStyles: { fillColor: [254, 242, 242], textColor: [153, 27, 27], fontStyle: 'bold' },
-                styles: { 
-                    fillColor: [255, 255, 255],
-                    fontSize: 9, 
-                    cellPadding: 4, 
-                    lineColor: [200, 200, 200], 
-                    lineWidth: 0.5 
-                },
-                columnStyles: { 0: { cellWidth: 120 }, 1: { cellWidth: 60, fontStyle: 'bold' }, 2: { cellWidth: 'auto' } }
-            });
-            yPos = (doc as any).lastAutoTable.finalY + 15;
-        }
-        if (passedCount > 0) {
-            doc.setFontSize(9);
-            doc.setTextColor(70);
-            doc.text(`${passedCount} additional items passed safety inspection.`, margin, yPos);
-            yPos += 15;
-        }
+        allInspections.forEach((inspection, index) => {
+            if (allInspections.length > 1) {
+                yPos = checkAndAddPage(yPos, 40);
+                doc.setFontSize(11);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(50);
+                doc.text(inspection.name, margin, yPos);
+                yPos += 15;
+            }
+
+            const failedOrRepaired = inspection.items.filter(i => i.status === 'Fail' || i.status === 'Repaired');
+            const passedCount = inspection.items.filter(i => i.status === 'Pass').length;
+
+            if (failedOrRepaired.length > 0) {
+                yPos = checkAndAddPage(yPos, failedOrRepaired.length * 20 + 40);
+                autoTable(doc, {
+                    startY: yPos,
+                    head: [["Item", "Status", "Notes"]],
+                    body: failedOrRepaired.map(item => [item.name, item.status || 'N/A', item.notes || '']),
+                    theme: 'plain',
+                    headStyles: { fillColor: [254, 242, 242], textColor: [153, 27, 27], fontStyle: 'bold' },
+                    styles: { 
+                        fillColor: [255, 255, 255],
+                        fontSize: 9, 
+                        cellPadding: 4, 
+                        lineColor: [200, 200, 200], 
+                        lineWidth: 0.5 
+                    },
+                    columnStyles: { 0: { cellWidth: 120 }, 1: { cellWidth: 60, fontStyle: 'bold' }, 2: { cellWidth: 'auto' } }
+                });
+                yPos = (doc as any).lastAutoTable.finalY + 15;
+            }
+            if (passedCount > 0) {
+                yPos = checkAndAddPage(yPos, 20);
+                doc.setFontSize(9);
+                doc.setTextColor(70);
+                doc.text(`${passedCount} additional items passed inspection.`, margin, yPos);
+                yPos += 15;
+            }
+             if (index < allInspections.length - 1) {
+                yPos += 10; // Add some space between reports
+            }
+        });
     }
+
 
     // --- Footer on every page ---
     const pageCount = doc.getNumberOfPages();
