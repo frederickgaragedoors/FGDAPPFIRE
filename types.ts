@@ -1,5 +1,7 @@
 
 
+
+
 export interface FileAttachment {
   id: string;
   name: string;
@@ -82,6 +84,14 @@ export interface InspectionItem {
     notes?: string;
 }
 
+export interface StatusHistoryEntry {
+  id: string;
+  status: JobStatus;
+  timestamp: string; // ISO string
+  notes?: string;
+  duration?: number; // Estimated duration in minutes for this specific status
+}
+
 export interface JobTicket {
   id: string;
   date: string; // ISO string format e.g., "2023-10-27"
@@ -92,6 +102,7 @@ export interface JobTicket {
   jobLocationContactPhone?: string; // Phone of person at site
   createdAt?: string; // ISO string
   status: JobStatus;
+  statusHistory?: StatusHistoryEntry[];
   paymentStatus?: PaymentStatus;
   notes: string;
   parts: Part[];
