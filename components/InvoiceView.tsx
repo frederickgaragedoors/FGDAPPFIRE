@@ -367,10 +367,12 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
                                         <td className="p-3 text-right text-sm text-slate-700">${(part.cost * part.quantity).toFixed(2)}</td>
                                     </tr>
                                 ))}
-                                 <tr className="border-b border-slate-100">
-                                    <td className="p-3 text-sm text-slate-700" colSpan={3}>Labor</td>
-                                    <td className="p-3 text-right text-sm text-slate-700">${ticket.laborCost.toFixed(2)}</td>
-                                </tr>
+                                 {ticket.laborCost > 0 && (
+                                     <tr className="border-b border-slate-100">
+                                        <td className="p-3 text-sm text-slate-700" colSpan={3}>Labor</td>
+                                        <td className="p-3 text-right text-sm text-slate-700">${ticket.laborCost.toFixed(2)}</td>
+                                    </tr>
+                                 )}
                             </tbody>
                         </table>
                     </section>
@@ -395,7 +397,7 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
                                 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                     {/* Cash/Check Option */}
-                                    <div className="border-2 border-slate-200 rounded-lg p-4 bg-slate-50">
+                                    <div className="border-2 border-slate-200 rounded-lg px-4 pt-4 pb-6 bg-slate-50">
                                         <h5 className="font-bold text-slate-700 text-center border-b border-slate-200 pb-2 mb-3">Cash / Check</h5>
                                         <div className="space-y-2 text-sm">
                                             {deposit > 0 ? (
@@ -410,7 +412,7 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
                                                         <span>${cashBalance.toFixed(2)}</span>
                                                     </div>
 
-                                                    <div className="flex justify-between items-end border-t border-slate-200 pt-2 mt-4">
+                                                    <div className="flex justify-between items-end border-t border-slate-200 pt-3 mt-4">
                                                         <span className="text-slate-600 font-bold">Total</span>
                                                         <span className="font-bold text-lg text-slate-800">${cashTotal.toFixed(2)}</span>
                                                     </div>
@@ -425,7 +427,7 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
                                     </div>
 
                                     {/* Card Option */}
-                                    <div className="border-2 border-sky-100 rounded-lg p-4 bg-sky-50">
+                                    <div className="border-2 border-sky-100 rounded-lg px-4 pt-4 pb-6 bg-sky-50">
                                         <h5 className="font-bold text-slate-700 text-center border-b border-sky-200 pb-2 mb-3">Card Payment</h5>
                                         <div className="space-y-2 text-sm">
                                             <div className="flex justify-between text-slate-500">
@@ -447,7 +449,7 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
                                                         <span>${cardBalance.toFixed(2)}</span>
                                                     </div>
 
-                                                    <div className="flex justify-between items-end border-t border-sky-200 pt-2 mt-4">
+                                                    <div className="flex justify-between items-end border-t border-sky-200 pt-3 mt-4">
                                                         <span className="text-slate-700 font-bold">Total</span>
                                                         <span className="font-bold text-lg text-slate-800">${cardTotal.toFixed(2)}</span>
                                                     </div>
@@ -458,7 +460,7 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
                                                         <span className="text-slate-600">Job Total</span>
                                                         <span className="text-slate-800">${cashTotal.toFixed(2)}</span>
                                                     </div>
-                                                    <div className="flex justify-between items-end border-t border-sky-200 pt-1 mt-1">
+                                                    <div className="flex justify-between items-end border-t border-sky-200 pt-2 mt-2">
                                                         <span className="text-slate-700 font-medium">Total</span>
                                                         <span className="font-bold text-lg text-slate-800">${cardTotal.toFixed(2)}</span>
                                                     </div>
@@ -486,7 +488,7 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
                                         <span className="text-sm font-medium">${feeAmount.toFixed(2)}</span>
                                     </div>
                                 )}
-                                 <div className="flex justify-between py-3 mt-2 border-t-2 border-slate-300">
+                                 <div className="flex justify-between pt-4 pb-3 mt-2 border-t-2 border-slate-300">
                                     <span className="text-base font-bold text-slate-800">Total</span>
                                     <span className="text-base font-bold text-slate-800">${totalCost.toFixed(2)}</span>
                                 </div>
