@@ -256,8 +256,8 @@ export const JobDetailView: React.FC<JobDetailViewProps> = ({
                         </div>
                     </div>
                   
-                  <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
+                  <div className="p-5 flex flex-row gap-6">
+                    <div className="flex-1 min-w-0">
                         <h4 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">Bill To</h4>
                         <div className="space-y-3">
                             <div className="flex items-start space-x-3">
@@ -279,7 +279,7 @@ export const JobDetailView: React.FC<JobDetailViewProps> = ({
                         </div>
                     </div>
                     {hasDifferentServiceLocation && (
-                         <div>
+                         <div className="flex-1 min-w-0">
                             <h4 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">Service Location</h4>
                              <div className="space-y-3">
                                 {(ticket.jobLocationContactName) && (
