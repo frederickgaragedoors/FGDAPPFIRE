@@ -126,9 +126,13 @@ export const JobDetailView: React.FC<JobDetailViewProps> = ({
       finalInspections = [...normalizedInspections, savedInspectionData];
     }
     
-    // Update the ticket, ensuring the legacy field is cleared
-    const updatedTicket = { ...ticket, inspections: finalInspections, inspection: undefined };
-    handleUpdateContactJobTickets(contact.id, updatedTicket);
+    // Create a mutable copy to update
+    const updatedTicket: Partial<JobTicket> = { ...ticket, inspections: finalInspections };
+    
+    // Explicitly delete the legacy `inspection` property to avoid `undefined` values during serialization.
+    delete updatedTicket.inspection;
+    
+    handleUpdateContactJobTickets(contact.id, updatedTicket as JobTicket);
     setEditingInspection(null);
   };
 
