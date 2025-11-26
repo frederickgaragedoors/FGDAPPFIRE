@@ -243,14 +243,14 @@ export const JobDetailView: React.FC<JobDetailViewProps> = ({
                         <p className="text-xs text-slate-400 dark:text-slate-500 font-mono mt-3">Ticket #{ticket.id}</p>
                     </div>
 
-                    <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4 border-b border-slate-200 dark:border-slate-700">
+                    <div className="p-5 grid grid-cols-2 gap-4 border-b border-slate-200 dark:border-slate-700">
                         <div className={`p-4 rounded-lg ${statusColor.base}`}>
                             <p className={`text-xs font-bold uppercase ${statusColor.text} opacity-75 tracking-wider`}>Job Status</p>
-                            <p className={`text-2xl font-bold ${statusColor.text} mt-1`}>{currentStatus}</p>
+                            <p className={`text-xl sm:text-2xl font-bold ${statusColor.text} mt-1`}>{currentStatus}</p>
                         </div>
                         <div className={`p-4 rounded-lg ${paymentStatusColor.base}`}>
                             <p className={`text-xs font-bold uppercase ${paymentStatusColor.text} opacity-75 tracking-wider`}>Payment</p>
-                            <p className={`text-2xl font-bold ${paymentStatusColor.text} mt-1`}>{paymentStatusLabel}</p>
+                            <p className={`text-xl sm:text-2xl font-bold ${paymentStatusColor.text} mt-1`}>{paymentStatusLabel}</p>
                         </div>
                     </div>
                   
