@@ -18,15 +18,21 @@ const InspectionModal: React.FC<InspectionModalProps> = ({ inspection, onSave, o
     useEffect(() => {
         if (inspection) {
             setName(inspection.name);
-            const existingItems = inspection.items;
-            // Merge existing checks with potentially new default items
+            const existingItems = inspection.items || [];
+            // Merge existing checks with potentially new default items, ensuring all have a notes property
             const merged = DEFAULT_INSPECTION_ITEMS.map(defaultName => {
                 const existing = existingItems.find(i => i.name === defaultName);
-                if (existing) return existing;
+                if (existing) {
+                    return { ...existing, notes: existing.notes ?? '' };
+                }
                 return { id: generateId(), name: defaultName, status: 'N/A' as InspectionStatus, notes: '' };
             });
             
-            const extraItems = existingItems.filter(i => !DEFAULT_INSPECTION_ITEMS.includes(i.name));
+            // Process any custom items that aren't in the default list
+            const extraItems = existingItems
+              .filter(i => !DEFAULT_INSPECTION_ITEMS.includes(i.name))
+              .map(item => ({ ...item, notes: item.notes ?? '' }));
+
             setItems([...merged, ...extraItems]);
         } else {
             // Initialize fresh for a new inspection
