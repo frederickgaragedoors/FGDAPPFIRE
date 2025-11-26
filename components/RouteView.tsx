@@ -74,11 +74,14 @@ const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack, onViewJob
                     } else {
                         effectiveTime = ticket.time;
                     }
+                    
+                    const effectiveDuration = latestStatusEntry.duration ?? ticket.duration;
 
                     jobs.push({
                         ...ticket,
                         date: localDateString, 
                         time: effectiveTime,
+                        duration: effectiveDuration,
                         contactId: contact.id,
                         contactName: contact.name,
                         contactAddress: contact.address
