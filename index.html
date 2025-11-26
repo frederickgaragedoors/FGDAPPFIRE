@@ -18,10 +18,11 @@
 
     <!-- Tailwind Configuration (MUST be defined before the CDN script) -->
     <script>
-      tailwind.config = {
-        darkMode: 'class',
-        theme: {
-          extend: {}
+      // Define the configuration object that the Tailwind CDN script will look for.
+      // This prevents a `ReferenceError` by ensuring `tailwind` exists before the CDN script runs.
+      var tailwind = {
+        config: {
+          darkMode: 'class',
         }
       }
     </script>
