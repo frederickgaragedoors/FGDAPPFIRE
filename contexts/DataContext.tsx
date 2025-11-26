@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import { FirebaseUser as User, auth, db, storage } from '../firebase.ts';
 import { collection, doc, onSnapshot, setDoc, deleteDoc, updateDoc, QuerySnapshot, DocumentData, DocumentSnapshot } from 'firebase/firestore';
@@ -71,15 +70,18 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
     // UI State
     const [viewState, setViewState] = useState<ViewState>({ type: 'dashboard' });
     const [contactSelectorDate, setContactSelectorDate] = useState<Date | null>(null);
-    const [theme, setThemeState] = useState<Theme>('system');
-
-    // Initialize theme from local storage
-    useEffect(() => {
-        const storedTheme = localStorage.getItem('theme') as Theme | null;
-        if (storedTheme) {
-            setThemeState(storedTheme);
+    
+    // FIX: Initialize theme synchronously to prevent a flicker/race condition on load.
+    const getInitialTheme = (): Theme => {
+        if (typeof window !== 'undefined') {
+            const storedTheme = localStorage.getItem('theme') as Theme | null;
+            if (storedTheme) {
+                return storedTheme;
+            }
         }
-    }, []);
+        return 'system';
+    };
+    const [theme, setThemeState] = useState<Theme>(getInitialTheme);
 
     const setTheme = (newTheme: Theme) => {
         setThemeState(newTheme);
@@ -88,13 +90,20 @@ export const DataProvider: React.FC<DataProviderProps> = ({ user, isGuestMode, o
 
     // Apply Theme to document
     useEffect(() => {
-        const applyTheme = () => {
-            const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-            document.documentElement.classList.toggle('dark', isDark);
-        };
-        applyTheme();
+        const root = window.document.documentElement;
+        const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        
+        root.classList.toggle('dark', isDark);
+
         const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-        const handleChange = () => applyTheme();
+
+        const handleChange = (e: MediaQueryListEvent) => {
+            // Only apply change if theme is 'system'
+            if (localStorage.getItem('theme') === 'system' || !localStorage.getItem('theme')) {
+                root.classList.toggle('dark', e.matches);
+            }
+        };
+
         mediaQuery.addEventListener('change', handleChange);
         return () => mediaQuery.removeEventListener('change', handleChange);
     }, [theme]);
