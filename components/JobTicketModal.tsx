@@ -61,10 +61,6 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
       setStatusHistory(history);
 
     } else {
-      const now = new Date();
-      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-      const initialTimestamp = now.toISOString().slice(0, 16);
-      
       setDate(new Date().toISOString().split('T')[0]);
       setTime('');
       setDuration('');
@@ -82,7 +78,7 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
       setStatusHistory([{
           id: generateId(),
           status: 'Estimate Scheduled',
-          timestamp: new Date(initialTimestamp).toISOString(),
+          timestamp: new Date().toISOString(),
           notes: 'Job created.'
       }]);
     }
@@ -164,12 +160,10 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
   };
 
   const addHistoryEntry = () => {
-      const now = new Date();
-      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
       const newEntry: StatusHistoryEntry = {
           id: generateId(),
           status: statusHistory[0]?.status || 'Scheduled', // Get status from the newest entry
-          timestamp: now.toISOString(),
+          timestamp: new Date().toISOString(),
           notes: '',
       };
       // Add new entry and re-sort descending to ensure it's at the top.
