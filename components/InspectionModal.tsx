@@ -23,7 +23,7 @@ const InspectionModal: React.FC<InspectionModalProps> = ({ inspection, onSave, o
             const merged = DEFAULT_INSPECTION_ITEMS.map(defaultName => {
                 const existing = existingItems.find(i => i.name === defaultName);
                 if (existing) return existing;
-                return { id: generateId(), name: defaultName, status: 'N/A' as InspectionStatus };
+                return { id: generateId(), name: defaultName, status: 'N/A' as InspectionStatus, notes: '' };
             });
             
             const extraItems = existingItems.filter(i => !DEFAULT_INSPECTION_ITEMS.includes(i.name));
@@ -43,6 +43,10 @@ const InspectionModal: React.FC<InspectionModalProps> = ({ inspection, onSave, o
 
     const handleStatusChange = (id: string, status: InspectionStatus) => {
         setItems(prev => prev.map(item => item.id === id ? { ...item, status } : item));
+    };
+    
+    const handleNoteChange = (id: string, notes: string) => {
+        setItems(prev => prev.map(item => item.id === id ? { ...item, notes } : item));
     };
 
     const handleMarkAllPass = () => {
@@ -101,38 +105,49 @@ const InspectionModal: React.FC<InspectionModalProps> = ({ inspection, onSave, o
                 </div>
 
                 <div className="flex-grow overflow-y-auto p-4">
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                         {items.map((item, index) => (
-                            <div key={item.id} className={`flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg border ${getStatusColor(item.status || 'N/A')}`}>
-                                <div className="mb-2 sm:mb-0 sm:mr-4 flex-grow">
-                                    <span className="font-medium text-sm sm:text-base block">
-                                        <span className="opacity-60 mr-2">{index + 1}.</span>
-                                        {item.name}
-                                    </span>
-                                </div>
-                                <div className="flex bg-white dark:bg-slate-800 rounded-md shadow-sm p-1 w-full sm:w-auto">
-                                    {(['Pass', 'Fail', 'Repaired', 'N/A'] as InspectionStatus[]).map((option) => {
-                                         const isActive = item.status === option;
-                                         let activeClass = '';
-                                         if (isActive) {
-                                             if (option === 'Pass') activeClass = 'bg-green-500 text-white';
-                                             else if (option === 'Fail') activeClass = 'bg-red-500 text-white';
-                                             else if (option === 'Repaired') activeClass = 'bg-blue-500 text-white';
-                                             else activeClass = 'bg-slate-500 text-white';
-                                         } else {
-                                             activeClass = 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700';
-                                         }
+                            <div key={item.id} className={`p-3 rounded-lg border ${getStatusColor(item.status || 'N/A')}`}>
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between">
+                                    <div className="mb-2 sm:mb-0 sm:mr-4 flex-grow">
+                                        <span className="font-medium text-sm sm:text-base block">
+                                            <span className="opacity-60 mr-2">{index + 1}.</span>
+                                            {item.name}
+                                        </span>
+                                    </div>
+                                    <div className="flex bg-white dark:bg-slate-800 rounded-md shadow-sm p-1 w-full sm:w-auto">
+                                        {(['Pass', 'Fail', 'Repaired', 'N/A'] as InspectionStatus[]).map((option) => {
+                                             const isActive = item.status === option;
+                                             let activeClass = '';
+                                             if (isActive) {
+                                                 if (option === 'Pass') activeClass = 'bg-green-500 text-white';
+                                                 else if (option === 'Fail') activeClass = 'bg-red-500 text-white';
+                                                 else if (option === 'Repaired') activeClass = 'bg-blue-500 text-white';
+                                                 else activeClass = 'bg-slate-500 text-white';
+                                             } else {
+                                                 activeClass = 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700';
+                                             }
 
-                                         return (
-                                             <button
-                                                key={option}
-                                                onClick={() => handleStatusChange(item.id, option)}
-                                                className={`flex-1 sm:flex-none px-1 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded transition-colors ${activeClass}`}
-                                             >
-                                                 {option}
-                                             </button>
-                                         );
-                                    })}
+                                             return (
+                                                 <button
+                                                    key={option}
+                                                    onClick={() => handleStatusChange(item.id, option)}
+                                                    className={`flex-1 sm:flex-none px-1 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded transition-colors ${activeClass}`}
+                                                 >
+                                                     {option}
+                                                 </button>
+                                             );
+                                        })}
+                                    </div>
+                                </div>
+                                <div className="mt-2">
+                                    <input
+                                        type="text"
+                                        placeholder="Add notes (optional)..."
+                                        value={item.notes || ''}
+                                        onChange={(e) => handleNoteChange(item.id, e.target.value)}
+                                        className="block w-full text-xs px-2 py-1 bg-white/50 dark:bg-slate-900/20 border border-slate-300/50 dark:border-slate-600/50 rounded-md focus:outline-none focus:ring-1 focus:ring-sky-500 focus:border-sky-500"
+                                    />
                                 </div>
                             </div>
                         ))}
