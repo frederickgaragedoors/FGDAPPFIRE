@@ -72,6 +72,7 @@ export const JobDetailView: React.FC<JobDetailViewProps> = ({
   const [editingInspection, setEditingInspection] = useState<SafetyInspection | 'new' | null>(null);
   const isInspectionModalOpen = editingInspection !== null;
   const [isDeleteTicketModalOpen, setIsDeleteTicketModalOpen] = useState(false);
+  const [inspectionToDeleteId, setInspectionToDeleteId] = useState<string | null>(null);
 
   if (!contact || !ticket) {
         return (
@@ -140,6 +141,21 @@ export const JobDetailView: React.FC<JobDetailViewProps> = ({
     const updatedTickets = contact.jobTickets.filter(t => t.id !== ticket.id);
     handleUpdateContactJobTickets(contact.id, updatedTickets);
     onBack();
+  };
+
+  const performDeleteInspection = () => {
+    if (!inspectionToDeleteId) return;
+
+    const finalInspections = normalizedInspections.filter(i => i.id !== inspectionToDeleteId);
+    
+    // Create a mutable copy to update
+    const updatedTicket: Partial<JobTicket> = { ...ticket, inspections: finalInspections };
+    
+    // Explicitly delete the legacy `inspection` property if it exists, to keep data clean
+    delete updatedTicket.inspection;
+    
+    handleUpdateContactJobTickets(contact.id, updatedTicket as JobTicket);
+    setInspectionToDeleteId(null);
   };
   
   const statusHistory = useMemo(() => {
@@ -256,7 +272,7 @@ export const JobDetailView: React.FC<JobDetailViewProps> = ({
                         </div>
                     </div>
                   
-                  <div className="p-5 flex flex-row gap-6">
+                  <div className="p-5 flex flex-col md:flex-row gap-6">
                     <div className="flex-1 min-w-0">
                         <h4 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">Bill To</h4>
                         <div className="space-y-3">
@@ -392,7 +408,11 @@ export const JobDetailView: React.FC<JobDetailViewProps> = ({
                                   <div key={inspection.id} className="p-3 bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-700 rounded-lg">
                                       <div className="flex justify-between items-start">
                                           <h4 className="font-bold text-slate-700 dark:text-slate-200">{inspection.name}</h4>
-                                          <button onClick={() => setEditingInspection(inspection)} className="text-xs text-sky-600 dark:text-sky-400 font-medium hover:underline">Edit</button>
+                                          <div className="flex items-center space-x-2">
+                                              <button onClick={() => setEditingInspection(inspection)} className="text-xs text-sky-600 dark:text-sky-400 font-medium hover:underline">Edit</button>
+                                              <span className="text-slate-300 dark:text-slate-600">|</span>
+                                              <button onClick={() => setInspectionToDeleteId(inspection.id)} className="text-xs text-red-600 dark:text-red-400 font-medium hover:underline">Delete</button>
+                                          </div>
                                       </div>
                                       <div className="grid grid-cols-3 gap-2 mt-3 text-center">
                                           <div className="bg-red-100 dark:bg-red-900/30 p-1 rounded">
@@ -536,6 +556,16 @@ export const JobDetailView: React.FC<JobDetailViewProps> = ({
           onConfirm={performDeleteTicket}
           title="Delete Job Ticket"
           message="Are you sure you want to delete this job ticket? This action cannot be undone."
+        />
+      )}
+
+      {inspectionToDeleteId && (
+        <ConfirmationModal
+          isOpen={!!inspectionToDeleteId}
+          onClose={() => setInspectionToDeleteId(null)}
+          onConfirm={performDeleteInspection}
+          title="Delete Inspection"
+          message="Are you sure you want to delete this inspection? This action cannot be undone."
         />
       )}
     </>
