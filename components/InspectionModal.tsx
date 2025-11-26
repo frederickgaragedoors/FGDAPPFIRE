@@ -23,7 +23,8 @@ const InspectionModal: React.FC<InspectionModalProps> = ({ inspection, onSave, o
             const merged = DEFAULT_INSPECTION_ITEMS.map(defaultName => {
                 const existing = existingItems.find(i => i.name === defaultName);
                 if (existing) {
-                    return { ...existing, notes: existing.notes ?? '' };
+                    // Ensure both status and notes are present
+                    return { ...existing, status: existing.status || 'N/A', notes: existing.notes ?? '' };
                 }
                 return { id: generateId(), name: defaultName, status: 'N/A' as InspectionStatus, notes: '' };
             });
@@ -31,7 +32,8 @@ const InspectionModal: React.FC<InspectionModalProps> = ({ inspection, onSave, o
             // Process any custom items that aren't in the default list
             const extraItems = existingItems
               .filter(i => !DEFAULT_INSPECTION_ITEMS.includes(i.name))
-              .map(item => ({ ...item, notes: item.notes ?? '' }));
+              // Ensure both status and notes are present for custom items too
+              .map(item => ({ ...item, status: item.status || 'N/A', notes: item.notes ?? '' }));
 
             setItems([...merged, ...extraItems]);
         } else {
