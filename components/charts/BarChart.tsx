@@ -4,7 +4,7 @@ interface BarChartProps {
     data: { label: string; value: number; color: string }[];
 }
 
-const BarChart: React.FC<BarChartProps> = ({ data }) => {
+export const BarChart: React.FC<BarChartProps> = ({ data }) => {
     const maxValue = Math.max(...data.map(d => d.value), 1); // Avoid division by zero
     const chartHeight = 200;
     const barWidth = 40;
@@ -70,5 +70,3 @@ const BarChart: React.FC<BarChartProps> = ({ data }) => {
         </svg>
     );
 };
-
-export default BarChart;
