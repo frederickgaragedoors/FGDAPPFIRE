@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../contexts/DataContext.tsx';
-import BarChart from './charts/BarChart.tsx';
-import DonutChart from './charts/DonutChart.tsx';
+import { BarChart } from './charts/BarChart.tsx';
+import { DonutChart } from './charts/DonutChart.tsx';
 import { ExpenseCategory, Expense, BankTransaction } from '../types.ts';
 import { exportToCsv } from '../utils.ts';
 
