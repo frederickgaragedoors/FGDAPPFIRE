@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { Contact, JobTicket, jobStatusColors, paymentStatusColors, paymentStatusLabels, DEFAULT_ON_MY_WAY_TEMPLATE, JobStatus, StatusHistoryEntry, SafetyInspection } from '../types.ts';
+import { Contact, JobTicket, jobStatusColors, paymentStatusColors, paymentStatusLabels, DEFAULT_ON_MY_WAY_TEMPLATE, JobStatus, StatusHistoryEntry, SafetyInspection, Supplier } from '../types.ts';
 import { useData } from '../contexts/DataContext.tsx';
 import JobTicketModal from './JobTicketModal.tsx';
 import InspectionModal from './InspectionModal.tsx';
 import ConfirmationModal from './ConfirmationModal.tsx';
+import AddTripModal from './AddTripModal.tsx';
 import {
   ArrowLeftIcon,
   PhoneIcon,
@@ -62,6 +63,8 @@ export const JobDetailView: React.FC<JobDetailViewProps> = ({
     partsCatalog, 
     enabledStatuses, 
     mapSettings,
+    mileageLogs,
+    handleAddSupplierTrip,
     handleUpdateContactJobTickets,
   } = useData();
   
@@ -73,6 +76,7 @@ export const JobDetailView: React.FC<JobDetailViewProps> = ({
   const isInspectionModalOpen = editingInspection !== null;
   const [isDeleteTicketModalOpen, setIsDeleteTicketModalOpen] = useState(false);
   const [inspectionToDeleteId, setInspectionToDeleteId] = useState<string | null>(null);
+  const [isTripModalOpen, setIsTripModalOpen] = useState(false);
 
   if (!contact || !ticket) {
         return (
@@ -118,6 +122,10 @@ export const JobDetailView: React.FC<JobDetailViewProps> = ({
     }
     return [];
   }, [ticket.inspections, ticket.inspection]);
+
+  const jobMileage = useMemo(() => {
+    return (mileageLogs || []).filter(log => log.jobId === ticket.id).sort((a,b) => a.date.localeCompare(b.date));
+  }, [mileageLogs, ticket.id]);
 
   const handleSaveInspection = (savedInspectionData: SafetyInspection) => {
     let finalInspections: SafetyInspection[];
@@ -388,7 +396,41 @@ export const JobDetailView: React.FC<JobDetailViewProps> = ({
 
             {/* Sidebar Column */}
             <div className="space-y-6">
-              {/* 3. Safety Inspection Card */}
+               {/* 3. Mileage Card */}
+              <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
+                  <div className="flex justify-between items-center mb-4">
+                      <div className="flex items-center">
+                          <CarIcon className="w-6 h-6 text-slate-600 dark:text-slate-300 mr-3" />
+                          <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Mileage & Trips</h3>
+                      </div>
+                       <button
+                          onClick={() => setIsTripModalOpen(true)}
+                          disabled={!businessInfo.suppliers || businessInfo.suppliers.length === 0}
+                          className="flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300 hover:bg-sky-200 dark:hover:bg-sky-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          title={!businessInfo.suppliers || businessInfo.suppliers.length === 0 ? "Add suppliers in Settings to enable this" : "Add a trip to a supplier"}
+                      >
+                          <PlusIcon className="w-4 h-4" />
+                          <span>Add Trip</span>
+                      </button>
+                  </div>
+                   {jobMileage.length > 0 ? (
+                      <ul className="space-y-3">
+                          {jobMileage.map(log => (
+                              <li key={log.id} className="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                                  <div className="flex justify-between items-start">
+                                      <p className="font-semibold text-sm text-slate-800 dark:text-slate-100 flex-grow pr-2">{log.notes}</p>
+                                      <p className="font-bold text-sm text-slate-700 dark:text-slate-200 whitespace-nowrap">{log.distance} mi</p>
+                                  </div>
+                                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{log.startAddress} &rarr; {log.endAddress}</p>
+                              </li>
+                          ))}
+                      </ul>
+                  ) : (
+                      <p className="text-sm text-center text-slate-500 dark:text-slate-400 italic py-4">No special trips logged for this job.</p>
+                  )}
+              </div>
+
+              {/* 4. Safety Inspection Card */}
               <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
                   <div className="flex justify-between items-center mb-4">
                       <div className="flex items-center">
@@ -447,7 +489,7 @@ export const JobDetailView: React.FC<JobDetailViewProps> = ({
               </div>
 
 
-              {/* 4. Costs Card */}
+              {/* 5. Costs Card */}
               <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
                 <div className="flex items-center mb-4 border-b dark:border-slate-700 pb-3">
                     <CurrencyDollarIcon className="w-6 h-6 text-slate-600 dark:text-slate-300 mr-3" />
@@ -509,7 +551,7 @@ export const JobDetailView: React.FC<JobDetailViewProps> = ({
                 )}
               </div>
 
-              {/* 5. Work Notes Card */}
+              {/* 6. Work Notes Card */}
               <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
                   <div className="flex items-center mb-4 border-b dark:border-slate-700 pb-3">
                       <ClipboardListIcon className="w-6 h-6 text-slate-600 dark:text-slate-300 mr-3" />
@@ -566,6 +608,19 @@ export const JobDetailView: React.FC<JobDetailViewProps> = ({
           onConfirm={performDeleteInspection}
           title="Delete Inspection"
           message="Are you sure you want to delete this inspection? This action cannot be undone."
+        />
+      )}
+
+      {isTripModalOpen && (
+        <AddTripModal
+            isOpen={isTripModalOpen}
+            onClose={() => setIsTripModalOpen(false)}
+            onSave={(data) => {
+                handleAddSupplierTrip(ticket, data);
+                setIsTripModalOpen(false);
+            }}
+            job={ticket}
+            suppliers={businessInfo.suppliers || []}
         />
       )}
     </>

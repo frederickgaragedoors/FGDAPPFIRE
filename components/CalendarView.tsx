@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { JobTicket, jobStatusColors, paymentStatusColors, paymentStatusLabels } from '../types.ts';
 import { useData } from '../contexts/DataContext.tsx';
 import { ChevronLeftIcon, ChevronRightIcon, BriefcaseIcon, PlusIcon, CalendarIcon } from './icons.tsx';
-import { formatTime } from '../utils.ts';
+import { formatTime, getLocalDateString } from '../utils.ts';
 import EmptyState from './EmptyState.tsx';
 
 interface CalendarViewProps {
@@ -13,13 +13,6 @@ interface CalendarViewProps {
 type JobEvent = JobTicket & {
     contactId: string;
     contactName: string;
-};
-
-const getLocalDateString = (date: Date) => {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
 };
 
 const CalendarView: React.FC<CalendarViewProps> = ({ onViewJob, onAddJob }) => {

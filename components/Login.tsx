@@ -11,12 +11,12 @@ const Login: React.FC<LoginProps> = ({ onGuestLogin }) => {
   const [error, setError] = useState<string | null>(null);
   const [unauthorizedDomain, setUnauthorizedDomain] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [currentHostname, setCurrentHostname] = useState('');
   const [isIframe, setIsIframe] = useState(false);
+
+  const currentHostname = typeof window !== 'undefined' ? window.location.hostname : '';
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-        setCurrentHostname(window.location.hostname);
         try {
             setIsIframe(window.self !== window.top);
         } catch (e) {

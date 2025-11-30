@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { DefaultFieldSetting, BusinessInfo, JobTemplate, JobStatus, ALL_JOB_STATUSES, EmailSettings, CatalogItem, DEFAULT_ON_MY_WAY_TEMPLATE, MapSettings, Theme } from '../types.ts';
-import { ArrowLeftIcon, TrashIcon, PlusIcon, DownloadIcon, UploadIcon, UserCircleIcon, EditIcon, CalendarIcon, ChevronDownIcon, MapPinIcon } from './icons.tsx';
+import { DefaultFieldSetting, BusinessInfo, JobTemplate, JobStatus, ALL_JOB_STATUSES, EmailSettings, CatalogItem, DEFAULT_ON_MY_WAY_TEMPLATE, MapSettings, Theme, CategorizationRule, ExpenseCategory, ALL_EXPENSE_CATEGORIES, Supplier } from '../types.ts';
+import { ArrowLeftIcon, TrashIcon, PlusIcon, DownloadIcon, UploadIcon, UserCircleIcon, EditIcon, CalendarIcon, ChevronDownIcon, MapPinIcon, BuildingStorefrontIcon } from './icons.tsx';
 import { saveJsonFile, fileToDataUrl, generateICSContent, downloadICSFile, generateId } from '../utils.ts';
 import JobTemplateModal from './JobTemplateModal.tsx';
 import { useGoogleMaps } from '../hooks/useGoogleMaps.ts';
 import { useData } from '../contexts/DataContext.tsx';
+import { useNotifications } from '../contexts/NotificationContext.tsx';
 import { auth } from '../firebase.ts';
 import { signOut } from 'firebase/auth';
 import ConfirmationModal from './ConfirmationModal.tsx';
@@ -41,6 +42,8 @@ interface SettingsProps {
     onBack: () => void;
 }
 
+const RULE_CATEGORIES = ALL_EXPENSE_CATEGORIES.filter(c => c !== 'Uncategorized' && c !== 'Mileage');
+
 const Settings: React.FC<SettingsProps> = ({ onBack }) => {
     const {
         defaultFields,
@@ -59,9 +62,13 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
         onSwitchToCloud,
         loadDemoData,
         restoreBackup,
+        handleDeleteAllBankData,
         theme,
         setTheme,
+        categorizationRules,
+        handleSaveCategorizationRules,
     } = useData();
+    const { addNotification } = useNotifications();
     
     const [newFieldLabel, setNewFieldLabel] = useState('');
     const [currentBusinessInfo, setCurrentBusinessInfo] = useState<BusinessInfo>(businessInfo);
@@ -73,8 +80,15 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
     const [newCatalogItemCost, setNewCatalogItemCost] = useState<number | ''>('');
     const [isRestoreConfirmOpen, setIsRestoreConfirmOpen] = useState(false);
     const [restoreFileContent, setRestoreFileContent] = useState<string | null>(null);
+    const [isClearBankDataConfirmOpen, setIsClearBankDataConfirmOpen] = useState(false);
+    const [currentRules, setCurrentRules] = useState<CategorizationRule[]>([]);
+    const [newRuleKeyword, setNewRuleKeyword] = useState('');
+    const [newRuleCategory, setNewRuleCategory] = useState<ExpenseCategory>('Other');
+    const [newSupplierName, setNewSupplierName] = useState('');
+    const [newSupplierAddress, setNewSupplierAddress] = useState('');
 
     const homeAddressRef = useRef<HTMLInputElement>(null);
+    const supplierAddressRef = useRef<HTMLInputElement>(null);
     const apiKey = currentMapSettings.apiKey || mapSettings.apiKey;
     const { isLoaded: isMapsLoaded } = useGoogleMaps(apiKey);
 
@@ -86,19 +100,26 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
     useEffect(() => { setCurrentBusinessInfo(businessInfo) }, [businessInfo]);
     useEffect(() => { setCurrentEmailSettings(emailSettings) }, [emailSettings]);
     useEffect(() => { setCurrentMapSettings(mapSettings) }, [mapSettings]);
+    useEffect(() => { setCurrentRules(categorizationRules || []) }, [categorizationRules]);
 
-    // Initialize Google Maps Autocomplete for Home Address
+
+    // Initialize Google Maps Autocomplete
     useEffect(() => {
-        if (isMapsLoaded && homeAddressRef.current && (window as any).google && (window as any).google.maps) {
-            const autocomplete = new (window as any).google.maps.places.Autocomplete(homeAddressRef.current);
-            autocomplete.addListener('place_changed', () => {
-                const place = autocomplete.getPlace();
-                if (place.formatted_address) {
-                    handleMapSettingsChange('homeAddress', place.formatted_address);
-                } else if (place.name) {
-                    handleMapSettingsChange('homeAddress', place.name);
-                }
-            });
+        if (isMapsLoaded && (window as any).google && (window as any).google.maps) {
+            if (homeAddressRef.current) {
+                const autocomplete = new (window as any).google.maps.places.Autocomplete(homeAddressRef.current);
+                autocomplete.addListener('place_changed', () => {
+                    const place = autocomplete.getPlace();
+                    handleMapSettingsChange('homeAddress', place.formatted_address || place.name || '');
+                });
+            }
+            if (supplierAddressRef.current) {
+                const autocomplete = new (window as any).google.maps.places.Autocomplete(supplierAddressRef.current);
+                autocomplete.addListener('place_changed', () => {
+                    const place = autocomplete.getPlace();
+                    setNewSupplierAddress(place.formatted_address || place.name || '');
+                });
+            }
         }
     }, [isMapsLoaded]);
 
@@ -116,7 +137,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
         saveSettings({ defaultFields: newFields });
     };
     
-    const handleBusinessInfoChange = (field: keyof BusinessInfo, value: string | number) => {
+    const handleBusinessInfoChange = (field: keyof BusinessInfo, value: any) => {
         setCurrentBusinessInfo(prev => ({ ...prev, [field]: value }));
     };
     
@@ -127,7 +148,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
     const handleMapSettingsChange = (field: keyof MapSettings, value: string) => {
         setCurrentMapSettings(prev => ({ ...prev, [field]: value }));
     };
-
+    
     const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             const dataUrl = await fileToDataUrl(e.target.files[0]);
@@ -138,21 +159,21 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
     const handleBusinessInfoSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         saveSettings({ businessInfo: currentBusinessInfo });
-        alert('Business info saved.');
+        addNotification('Business info saved.', 'success');
     };
 
     const handleEmailSettingsSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         saveSettings({ emailSettings: currentEmailSettings, businessInfo: currentBusinessInfo });
-        alert('Settings saved.');
+        addNotification('Communication templates saved.', 'success');
     };
 
     const handleMapSettingsSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        saveSettings({ mapSettings: currentMapSettings });
-        alert('Map settings saved.');
+        saveSettings({ mapSettings: currentMapSettings, businessInfo: currentBusinessInfo });
+        addNotification('Map settings saved.', 'success');
     };
-
+    
     const handleManualBackup = async () => {
         const timestamp = new Date().toISOString().slice(0, 10);
         await saveJsonFile(appStateForBackup, `contacts-backup-${timestamp}.json`);
@@ -176,7 +197,12 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
     
     const handleConfirmRestore = async () => {
         if (restoreFileContent) {
-            await restoreBackup(restoreFileContent);
+            try {
+                await restoreBackup(restoreFileContent);
+                addNotification('Backup restored successfully!', 'success');
+            } catch (error: any) {
+                addNotification(error.message || 'Failed to restore backup.', 'error');
+            }
         }
         setIsRestoreConfirmOpen(false);
         setRestoreFileContent(null);
@@ -232,6 +258,44 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
         if (auth) {
             signOut(auth).catch(error => console.error("Sign out error", error));
         }
+    };
+    
+    const handleAddRule = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newRuleKeyword.trim()) return;
+        const newRule: CategorizationRule = {
+            id: generateId(),
+            keyword: newRuleKeyword.trim(),
+            category: newRuleCategory,
+        };
+        setCurrentRules(prev => [...prev, newRule]);
+        setNewRuleKeyword('');
+        setNewRuleCategory('Other');
+    };
+
+    const handleDeleteRule = (id: string) => {
+        setCurrentRules(prev => prev.filter(rule => rule.id !== id));
+    };
+
+    const handleSaveRules = () => {
+        handleSaveCategorizationRules(currentRules);
+        addNotification('Categorization rules saved!', 'success');
+    };
+    
+    const handleAddSupplier = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (newSupplierName.trim() && newSupplierAddress.trim()) {
+            const newSupplier: Supplier = { id: generateId(), name: newSupplierName, address: newSupplierAddress };
+            const updatedSuppliers = [...(currentBusinessInfo.suppliers || []), newSupplier];
+            handleBusinessInfoChange('suppliers', updatedSuppliers);
+            setNewSupplierName('');
+            setNewSupplierAddress('');
+        }
+    };
+
+    const handleDeleteSupplier = (id: string) => {
+        const updatedSuppliers = (currentBusinessInfo.suppliers || []).filter(s => s.id !== id);
+        handleBusinessInfoChange('suppliers', updatedSuppliers);
     };
 
     const inputStyles = "mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm dark:text-white";
@@ -346,7 +410,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
                         </div>
                     </div>
                 </SettingsSection>
-
+                
                 <SettingsSection title="Business Information" subtitle="This info will appear on your estimates and receipts.">
                      <form onSubmit={handleBusinessInfoSubmit}>
                         <div className="mt-2 space-y-4">
@@ -393,6 +457,38 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
                          <button type="submit" className="mt-4 px-4 py-2 rounded-md text-sm font-medium text-white bg-sky-500 hover:bg-sky-600 transition-colors">Save Business Info</button>
                     </form>
                 </SettingsSection>
+                
+                <SettingsSection title="My Suppliers" subtitle="Manage addresses for parts suppliers.">
+                    <form onSubmit={handleAddSupplier} className="mt-2 flex gap-2 items-end">
+                        <div className="flex-grow"><label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Supplier Name</label><input type="text" value={newSupplierName} onChange={(e) => setNewSupplierName(e.target.value)} placeholder="e.g., Main Street Supply" className={inputStyles} /></div>
+                        <div className="flex-grow">
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Address</label>
+                            <input ref={supplierAddressRef} type="text" value={newSupplierAddress} onChange={e => setNewSupplierAddress(e.target.value)} onKeyDown={e => { if(e.key === 'Enter') e.preventDefault(); }} placeholder="123 Industrial Way" className={inputStyles} autoComplete="off" />
+                        </div>
+                        <button type="submit" className="mb-[1px] inline-flex items-center px-4 py-2 rounded-md text-sm font-medium text-white bg-sky-500 hover:bg-sky-600 transition-colors"><PlusIcon className="w-5 h-5" /></button>
+                    </form>
+                    <div className="mt-6 border-t dark:border-slate-700 pt-4">
+                        {(currentBusinessInfo.suppliers || []).length > 0 ? (
+                            <ul className="space-y-2">
+                                {(currentBusinessInfo.suppliers || []).map(supplier => (
+                                    <li key={supplier.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                                        <div className="flex items-center">
+                                            <BuildingStorefrontIcon className="w-6 h-6 text-slate-500 dark:text-slate-400 mr-4"/>
+                                            <div>
+                                                <p className="font-semibold text-slate-800 dark:text-slate-100">{supplier.name}</p>
+                                                <p className="text-xs text-slate-500 dark:text-slate-400">{supplier.address}</p>
+                                            </div>
+                                        </div>
+                                        <button onClick={() => handleDeleteSupplier(supplier.id)} className="p-2 text-slate-500 dark:text-slate-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-full transition-colors"><TrashIcon className="w-5 h-5" /></button>
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : (
+                            <p className="text-center text-slate-500 dark:text-slate-400 p-4">No suppliers added yet.</p>
+                        )}
+                    </div>
+                     <button onClick={handleBusinessInfoSubmit} className="mt-4 px-4 py-2 rounded-md text-sm font-medium text-white bg-sky-500 hover:bg-sky-600 transition-colors">Save Suppliers</button>
+                </SettingsSection>
 
                 <SettingsSection title="Map & Route Settings" subtitle="Configure your starting location and API key for routing.">
                     <form onSubmit={handleMapSettingsSubmit}>
@@ -401,6 +497,10 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
                                 <label htmlFor="home-address" className={labelStyles}>Home / Base Address</label>
                                 <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Used as the starting and ending point for your daily routes.</p>
                                 <input ref={homeAddressRef} type="text" id="home-address" value={currentMapSettings.homeAddress || ''} onChange={e => handleMapSettingsChange('homeAddress', e.target.value)} onKeyDown={e => { if(e.key === 'Enter') e.preventDefault(); }} className={inputStyles} placeholder="e.g. 123 Warehouse Blvd, Springfield" autoComplete="off" />
+                            </div>
+                             <div>
+                                <label htmlFor="mileage-rate" className={labelStyles}>Standard Mileage Rate ($ per mile)</label>
+                                <input type="number" id="mileage-rate" value={currentBusinessInfo.standardMileageRate || ''} onChange={e => handleBusinessInfoChange('standardMileageRate', parseFloat(e.target.value))} step="0.001" className={inputStyles} placeholder="e.g. 0.655" />
                             </div>
                             <div>
                                 <label htmlFor="api-key" className={labelStyles}>Google Maps API Key</label>
@@ -422,6 +522,38 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
                         </div>
                         <button type="submit" className="mt-4 px-4 py-2 rounded-md text-sm font-medium text-white bg-sky-500 hover:bg-sky-600 transition-colors">Save Map Settings</button>
                     </form>
+                </SettingsSection>
+
+                <SettingsSection title="Auto-Categorization Rules" subtitle="Automatically categorize imported bank transactions.">
+                    <form onSubmit={handleAddRule} className="mt-2 flex gap-2 items-end">
+                        <div className="flex-grow"><label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Keyword</label><input type="text" value={newRuleKeyword} onChange={(e) => setNewRuleKeyword(e.target.value)} placeholder="e.g. Home Depot" className={inputStyles} /></div>
+                        <div className="flex-grow">
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Category</label>
+                            <select value={newRuleCategory} onChange={e => setNewRuleCategory(e.target.value as ExpenseCategory)} className={inputStyles}>
+                                {RULE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        </div>
+                        <button type="submit" className="mb-[1px] inline-flex items-center px-4 py-2 rounded-md text-sm font-medium text-white bg-sky-500 hover:bg-sky-600 transition-colors"><PlusIcon className="w-5 h-5" /></button>
+                    </form>
+
+                     <div className="mt-6 border-t dark:border-slate-700 pt-4">
+                        {currentRules.length > 0 ? (
+                            <ul className="space-y-2">
+                                {currentRules.map(rule => (
+                                    <li key={rule.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                                        <div>
+                                            <p className="font-semibold text-slate-800 dark:text-slate-100">{rule.keyword}</p>
+                                            <p className="text-xs text-sky-600 dark:text-sky-400 font-medium">{rule.category}</p>
+                                        </div>
+                                        <button onClick={() => handleDeleteRule(rule.id)} className="p-2 text-slate-500 dark:text-slate-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-full transition-colors"><TrashIcon className="w-5 h-5" /></button>
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : (
+                            <p className="text-center text-slate-500 dark:text-slate-400 p-4">No rules created yet.</p>
+                        )}
+                    </div>
+                     <button onClick={handleSaveRules} className="mt-4 px-4 py-2 rounded-md text-sm font-medium text-white bg-sky-500 hover:bg-sky-600 transition-colors">Save Rules</button>
                 </SettingsSection>
                 
                 <SettingsSection title="Communication Templates" subtitle="Configure default messages for SMS and Emails.">
@@ -584,6 +716,19 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
                             </div>
                             <label htmlFor="backup-upload" className="cursor-pointer inline-flex items-center justify-center whitespace-nowrap flex-shrink-0 space-x-2 px-3 py-2 rounded-md text-sm font-medium text-sky-600 dark:text-sky-300 bg-sky-100 dark:bg-sky-900/50 hover:bg-sky-200 dark:hover:bg-sky-900 transition-colors"><UploadIcon className="w-4 h-4" /><span>Import Backup</span><input id="backup-upload" type="file" accept=".json" className="hidden" onChange={handleFileImport} /></label>
                         </div>
+                        <div className="flex items-center justify-between gap-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                            <div>
+                                <p className="font-medium text-red-800 dark:text-red-200">Clear Bank Data</p>
+                                <p className="text-xs text-red-600 dark:text-red-400">Delete all imported bank statements and transactions.</p>
+                            </div>
+                            <button 
+                                onClick={() => setIsClearBankDataConfirmOpen(true)} 
+                                className="inline-flex items-center justify-center whitespace-nowrap flex-shrink-0 space-x-2 px-3 py-2 rounded-md text-sm font-medium text-red-700 bg-red-100 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-300 dark:hover:bg-red-900 transition-colors"
+                            >
+                                <TrashIcon className="w-4 h-4" />
+                                <span>Clear Data</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -607,6 +752,20 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
                     message="Restoring a backup will overwrite all current data. This action cannot be undone. Are you sure you want to proceed?"
                     confirmText="Restore"
                     confirmButtonClass="bg-sky-600 hover:bg-sky-700"
+                />
+            )}
+            {isClearBankDataConfirmOpen && (
+                <ConfirmationModal
+                    isOpen={isClearBankDataConfirmOpen}
+                    onClose={() => setIsClearBankDataConfirmOpen(false)}
+                    onConfirm={() => {
+                        handleDeleteAllBankData();
+                        setIsClearBankDataConfirmOpen(false);
+                    }}
+                    title="Clear All Bank Data"
+                    message="Are you sure you want to delete ALL bank statements and transactions? This will also unreconcile any linked expenses. This action cannot be undone."
+                    confirmText="Yes, Delete All"
+                    confirmButtonClass="bg-red-600 hover:bg-red-700"
                 />
             )}
         </div>
