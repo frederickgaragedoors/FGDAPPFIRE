@@ -4,7 +4,7 @@ interface DonutChartProps {
     data: { label: string; value: number; color: string }[];
 }
 
-const DonutChart: React.FC<DonutChartProps> = ({ data }) => {
+export const DonutChart: React.FC<DonutChartProps> = ({ data }) => {
     const [hoveredSegment, setHoveredSegment] = useState<string | null>(null);
 
     const total = data.reduce((acc, d) => acc + d.value, 0);
@@ -100,5 +100,3 @@ const DonutChart: React.FC<DonutChartProps> = ({ data }) => {
         </div>
     );
 };
-
-export default DonutChart;
