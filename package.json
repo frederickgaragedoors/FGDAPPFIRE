@@ -2,10 +2,10 @@
   "name": "business-contacts-manager",
   "private": true,
   "version": "1.0.0",
+  "type": "module",
   "description": "A modern and sleek business contacts application.",
   "author": "Your Name",
-  "main": "electron/main.js",
-  "type": "module",
+  "main": "electron/main.mjs",
   "homepage": ".",
   "scripts": {
     "dev": "vite",

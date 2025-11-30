@@ -1,9 +1,5 @@
 
 
-
-
-
-
 export interface FileAttachment {
   id: string;
   name: string;
@@ -153,6 +149,12 @@ export interface Contact {
   isPinned?: boolean;
 }
 
+export interface Supplier {
+  id: string;
+  name: string;
+  address: string;
+}
+
 export interface BusinessInfo {
   name: string;
   address: string;
@@ -163,6 +165,8 @@ export interface BusinessInfo {
   onMyWayTemplate?: string;
   defaultSalesTaxRate?: number;
   defaultProcessingFeeRate?: number;
+  standardMileageRate?: number;
+  suppliers?: Supplier[];
 }
 
 export interface MapSettings {
@@ -221,6 +225,85 @@ export const DEFAULT_INSPECTION_ITEMS = [
     "Remotes / Keypad"
 ];
 
+// --- EXPENSE TRACKING TYPES ---
+export type ExpenseCategory = 
+  | 'Advertising'
+  | 'Office Supplies' 
+  | 'Fuel' 
+  | 'Building Materials' 
+  | 'Meals & Entertainment' 
+  | 'Tools & Equipment' 
+  | 'Software' 
+  | 'Utilities' 
+  | 'Travel'
+  | 'Bank & Processing Fee'
+  | 'Mileage'
+  | 'Uncategorized'
+  | 'Other';
+
+export const ALL_EXPENSE_CATEGORIES: ExpenseCategory[] = ['Advertising', 'Office Supplies', 'Fuel', 'Building Materials', 'Meals & Entertainment', 'Tools & Equipment', 'Software', 'Utilities', 'Travel', 'Bank & Processing Fee', 'Mileage', 'Other', 'Uncategorized'];
+
+export interface ExpenseLineItem {
+  id: string;
+  description: string;
+  amount: number;
+  category: ExpenseCategory;
+}
+
+export interface Expense {
+  id: string;
+  vendor: string;
+  date: string; // YYYY-MM-DD
+  total: number;
+  tax: number;
+  lineItems: ExpenseLineItem[];
+  receiptUrl: string; // Base64 data URL (guest) or HTTPS URL (cloud)
+  receiptDataUrl?: string; // Always a Base64 data URL, used for processing
+  receiptHash?: string; // SHA-256 hash of the receipt file
+  createdAt: string; // ISO string
+  isReconciled: boolean;
+  bankTransactionIds?: string[];
+  isDeferred?: boolean;
+}
+
+export interface BankStatement {
+    id: string;
+    fileName: string;
+    fileHash?: string; // SHA-256 hash of the statement file
+    uploadedAt: string; // ISO String
+    transactionCount: number;
+    statementPeriod?: string; // e.g., "Oct 2025"
+}
+
+export interface BankTransaction {
+    id: string;
+    date: string; // YYYY-MM-DD
+    description: string;
+    amount: number; // Negative for debits, positive for credits
+    isReconciled: boolean;
+    createdAt: string; // ISO string
+    statementId?: string; // Link to the source BankStatement
+    category?: ExpenseCategory;
+}
+
+export interface CategorizationRule {
+  id: string;
+  keyword: string;
+  category: ExpenseCategory;
+}
+
+export interface Mileage {
+  id: string;
+  date: string; // YYYY-MM-DD
+  startAddress: string;
+  endAddress: string;
+  distance: number; // in miles
+  notes?: string;
+  jobId?: string;
+  jobContactName?: string;
+}
+
+
 export type ViewState = 
   | { type: 'list' }
   | { type: 'detail'; id: string; initialJobDate?: string; openJobId?: string }
@@ -231,6 +314,9 @@ export type ViewState =
   | { type: 'calendar' }
   | { type: 'route'; initialDate?: string }
   | { type: 'invoice'; contactId: string; ticketId: string; from?: 'contact_detail' | 'job_detail' }
-  | { type: 'job_detail'; contactId: string; ticketId: string };
+  | { type: 'job_detail'; contactId: string; ticketId: string }
+  | { type: 'expenses' }
+  | { type: 'reports' }
+  | { type: 'mileage' };
 
 export type Theme = 'light' | 'dark' | 'system';

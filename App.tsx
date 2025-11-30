@@ -14,7 +14,11 @@ import InvoiceView from './components/InvoiceView.tsx';
 import { JobDetailView } from './components/JobDetailView.tsx';
 import ContactSelectorModal from './components/ContactSelectorModal.tsx';
 import RouteView from './components/RouteView.tsx';
+import ExpensesView from './components/ExpensesView.tsx';
+import ReportsView from './components/ReportsView.tsx';
+import MileageView from './components/MileageView.tsx';
 import Login from './components/Login.tsx';
+import LoadingOverlay from './components/LoadingOverlay.tsx';
 import { SettingsIcon } from './components/icons.tsx';
 import { DataProvider, useData } from './contexts/DataContext.tsx';
 
@@ -37,6 +41,9 @@ const AppContent: React.FC = () => {
             case 'dashboard': return <Dashboard onViewJobDetail={(contactId, ticketId) => setViewState({ type: 'job_detail', contactId, ticketId })} />;
             case 'calendar': return <CalendarView onAddJob={(date) => setContactSelectorDate(date)} onViewJob={(contactId, ticketId) => setViewState({ type: 'job_detail', contactId, ticketId })} />;
             case 'route': return <RouteView onGoToSettings={() => setViewState({ type: 'settings' })} onBack={() => setViewState({ type: 'dashboard' })} onViewJobDetail={(contactId, ticketId) => setViewState({ type: 'job_detail', contactId, ticketId })} initialDate={viewState.initialDate} />;
+            case 'expenses': return <ExpensesView />;
+            case 'reports': return <ReportsView />;
+            case 'mileage': return <MileageView />;
             case 'list': return <ContactList selectedContactId={null} onSelectContact={(id) => setViewState({ type: 'detail', id })} onAddJob={(id) => setViewState({ type: 'detail', id, initialJobDate: createDateTrigger(new Date().toISOString().split('T')[0]) })} />;
             case 'detail':
                 if (!selectedContact) return <div className="p-4">Contact not found</div>;
@@ -57,6 +64,7 @@ const AppContent: React.FC = () => {
     
     return (
         <>
+            <LoadingOverlay />
             <Header 
                 currentView={viewState.type} 
                 onNewContact={() => setViewState({ type: 'new_form' })}
@@ -65,6 +73,9 @@ const AppContent: React.FC = () => {
                 onGoToList={() => setViewState({ type: 'list' })}
                 onGoToCalendar={() => setViewState({ type: 'calendar' })}
                 onGoToRoute={() => setViewState({ type: 'route' })}
+                onGoToExpenses={() => setViewState({ type: 'expenses' })}
+                onGoToReports={() => setViewState({ type: 'reports' })}
+                onGoToMileage={() => setViewState({ type: 'mileage' })}
             />
             <main className="flex-grow overflow-hidden relative">{renderView()}</main>
             {contactSelectorDate && (

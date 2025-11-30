@@ -52,3 +52,61 @@ code {
 .pac-container {
     z-index: 99999 !important;
 }
+
+/* Notification Animations */
+@keyframes toast-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-toast-in {
+  animation: toast-in 0.5s ease-out forwards;
+}
+
+@keyframes progress-bar {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+.animate-progress {
+  animation: progress-bar 5s linear forwards;
+}
+
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .printable-area, .printable-area * {
+    visibility: visible;
+  }
+  .printable-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 2rem;
+  }
+  .no-print {
+    display: none !important;
+  }
+  /* Ensure dark mode doesn't affect print */
+  .dark .printable-area {
+    background-color: white !important;
+    color: black !important;
+  }
+  .dark .printable-area th, .dark .printable-area td {
+    color: black !important;
+    border-color: #ccc !important;
+  }
+}

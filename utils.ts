@@ -1,4 +1,3 @@
-
 import { JobTicket, Contact } from './types.ts';
 
 /**
@@ -304,7 +303,7 @@ export const loadGoogleMapsScript = (apiKey: string): Promise<void> => {
 
     const script = document.createElement('script');
     script.id = scriptId;
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,directions`;
     script.async = true;
     script.defer = true;
     
@@ -324,4 +323,60 @@ export const loadGoogleMapsScript = (apiKey: string): Promise<void> => {
   });
 
   return googleMapsPromise;
+};
+
+/**
+ * Calculates the SHA-256 hash of a file.
+ * @param file The file to hash.
+ * @returns A promise that resolves to the hex string of the hash.
+ */
+export const calculateFileHash = async (file: File): Promise<string> => {
+    const buffer = await file.arrayBuffer();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return hashHex;
+};
+
+/**
+ * Gets a date string in YYYY-MM-DD format from a Date object.
+ */
+export const getLocalDateString = (date: Date): string => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+};
+
+/**
+ * Exports an array of objects to a CSV file.
+ * @param data The array of objects to export.
+ * @param filename The name of the file to download.
+ */
+export const exportToCsv = (data: Record<string, any>[], filename: string): void => {
+    if (data.length === 0) {
+        alert("No data available to export.");
+        return;
+    }
+
+    const headers = Object.keys(data[0]);
+    const csvRows = [headers.join(',')];
+
+    for (const row of data) {
+        const values = headers.map(header => {
+            const escaped = ('' + row[header]).replace(/"/g, '""');
+            return `"${escaped}"`;
+        });
+        csvRows.push(values.join(','));
+    }
+
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 };

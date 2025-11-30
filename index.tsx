@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
 import ErrorBoundary from './components/ErrorBoundary.tsx';
+import { NotificationProvider } from './contexts/NotificationContext.tsx';
 import './index.css';
 // import { registerSW } from 'virtual:pwa-register'; // UNCOMMENT FOR PWA DEPLOYMENT
 
@@ -30,7 +31,9 @@ const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
     <ErrorBoundary>
-      <App />
+      <NotificationProvider>
+        <App />
+      </NotificationProvider>
     </ErrorBoundary>
   </React.StrictMode>
 );
