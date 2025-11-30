@@ -20,10 +20,6 @@ const loadImageElement = (src: string): Promise<HTMLImageElement | null> => {
         
         const img = new Image();
 
-        // **THIS IS THE FIX**: Set crossOrigin for cloud-hosted (http) images.
-        // This is required to prevent a "tainted canvas" security error when jsPDF
-        // tries to read the image data from a different origin (like Firebase Storage).
-        // This error often fails silently, causing the image to disappear.
         if (src.startsWith('http')) {
             img.crossOrigin = "anonymous";
         }
@@ -32,7 +28,7 @@ const loadImageElement = (src: string): Promise<HTMLImageElement | null> => {
 
         img.onerror = (err) => {
             console.error("PDF Generator: Failed to load image element from URL. The image may be corrupt or the URL incorrect.", src, err);
-            resolve(null); // Resolve null to allow PDF generation to continue without the image.
+            resolve(null);
         };
 
         img.src = src;
