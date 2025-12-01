@@ -317,10 +317,10 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
                 {/* Account Section */}
                 <div className="mb-8">
                     <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-100">Account</h3>
-                    <div className="mt-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4 flex items-center justify-between border border-slate-200 dark:border-slate-600">
+                    <div className="mt-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border border-slate-200 dark:border-slate-600">
                         {isGuestMode ? (
                             <div className="flex items-center space-x-4">
-                                <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-600 flex items-center justify-center text-slate-500 dark:text-slate-300">
+                                <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-600 flex items-center justify-center text-slate-500 dark:text-slate-300 flex-shrink-0">
                                     <UserCircleIcon className="w-8 h-8" />
                                 </div>
                                 <div>
@@ -329,17 +329,17 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
                                 </div>
                             </div>
                         ) : (
-                            <div className="flex items-center space-x-4">
+                            <div className="flex items-center space-x-4 min-w-0">
                                 {user?.photoURL ? (
-                                    <img src={user.photoURL} alt="Profile" className="w-12 h-12 rounded-full" />
+                                    <img src={user.photoURL} alt="Profile" className="w-12 h-12 rounded-full flex-shrink-0" />
                                 ) : (
-                                    <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-600 flex items-center justify-center text-slate-500 dark:text-slate-300">
+                                    <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-600 flex items-center justify-center text-slate-500 dark:text-slate-300 flex-shrink-0">
                                         <UserCircleIcon className="w-8 h-8" />
                                     </div>
                                 )}
-                                <div>
-                                    <p className="font-medium text-slate-900 dark:text-white">{user?.displayName || 'User'}</p>
-                                    <p className="text-sm text-slate-500 dark:text-slate-400">{user?.email}</p>
+                                <div className="min-w-0">
+                                    <p className="font-medium text-slate-900 dark:text-white truncate">{user?.displayName || 'User'}</p>
+                                    <p className="text-sm text-slate-500 dark:text-slate-400 break-all">{user?.email}</p>
                                 </div>
                             </div>
                         )}
@@ -347,14 +347,14 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
                         {isGuestMode ? (
                             <button 
                                 onClick={onSwitchToCloud}
-                                className="px-4 py-2 text-sm font-medium text-white bg-sky-500 hover:bg-sky-600 rounded-md transition-colors"
+                                className="px-4 py-2 text-sm font-medium text-white bg-sky-500 hover:bg-sky-600 rounded-md transition-colors w-full sm:w-auto"
                             >
                                 Sign In & Sync
                             </button>
                         ) : (
                             <button 
                                 onClick={handleSignOut}
-                                className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30 rounded-md transition-colors"
+                                className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30 rounded-md transition-colors w-full sm:w-auto"
                             >
                                 Sign Out
                             </button>
