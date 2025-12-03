@@ -1,8 +1,8 @@
 import React from 'react';
-import { useData } from '../contexts/DataContext.tsx';
+import { useApp } from '../contexts/AppContext.tsx';
 
 const LoadingOverlay: React.FC = () => {
-    const { isGlobalLoading, globalLoadingMessage } = useData();
+    const { isGlobalLoading, globalLoadingMessage } = useApp();
 
     if (!isGlobalLoading) {
         return null;

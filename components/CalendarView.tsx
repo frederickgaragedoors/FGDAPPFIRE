@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { JobTicket, jobStatusColors, paymentStatusColors, paymentStatusLabels } from '../types.ts';
-import { useData } from '../contexts/DataContext.tsx';
+import { JobTicket, jobStatusColors, paymentStatusColors, paymentStatusLabels, JobStatus, PaymentStatus, StatusHistoryEntry } from '../types.ts';
+import { useContacts } from '../contexts/ContactContext.tsx';
 import { ChevronLeftIcon, ChevronRightIcon, BriefcaseIcon, PlusIcon, CalendarIcon } from './icons.tsx';
 import { formatTime, getLocalDateString } from '../utils.ts';
 import EmptyState from './EmptyState.tsx';
@@ -10,66 +10,93 @@ interface CalendarViewProps {
     onAddJob: (date: Date) => void;
 }
 
-type JobEvent = JobTicket & {
+// New type for a calendar event, based on a status history entry
+type CalendarEvent = JobTicket & {
     contactId: string;
     contactName: string;
+    // Unique ID for the event, combining ticket and history entry IDs
+    eventId: string; 
+    // Overriding JobTicket fields with StatusHistoryEntry fields for this specific event
+    status: JobStatus;
+    date: string; // The date for the calendar (YYYY-MM-DD)
+    time?: string;
+    notes: string; // Notes from status history, falling back to job notes
 };
 
 const CalendarView: React.FC<CalendarViewProps> = ({ onViewJob, onAddJob }) => {
-    const { contacts } = useData();
+    const { contacts } = useContacts();
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(new Date());
 
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
 
-    const allJobs = useMemo<JobEvent[]>(() => {
+    const allEvents = useMemo<CalendarEvent[]>(() => {
         return (contacts || []).flatMap(contact => 
-            (contact.jobTickets || []).map(ticket => {
+            (contact.jobTickets || []).flatMap(ticket => {
+                // FIX: This commit resolves TypeScript errors by refactoring the component to be fully compatible with the `statusHistory`-based data model. It removes dependencies on deprecated `status` and `date` properties by creating a robust fallback mechanism for older `JobTicket` data. The logic for determining an event's effective time has also been improved to prevent reliance on the non-existent `ticket.time` property, ensuring data consistency and eliminating type errors.
                 const history = ticket.statusHistory && ticket.statusHistory.length > 0
-                    ? [...ticket.statusHistory].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-                    : [{ status: ticket.status, timestamp: ticket.createdAt || ticket.date, id: 'fallback' }];
-                
-                const latestStatusEntry = history[0];
-                const timestamp = latestStatusEntry.timestamp;
-                const hasTime = timestamp.includes('T');
-                
-                const displayDate = hasTime ? new Date(timestamp) : new Date(`${timestamp}T00:00:00`);
+                    ? ticket.statusHistory
+                    : (ticket.createdAt ? [{ 
+                        id: 'fallback', 
+                        status: 'Job Created' as JobStatus, 
+                        timestamp: ticket.createdAt, 
+                        notes: ticket.notes 
+                    }] as StatusHistoryEntry[] : []);
 
-                let effectiveTime: string | undefined;
-                if (hasTime) {
-                    const hours = String(displayDate.getHours()).padStart(2, '0');
-                    const minutes = String(displayDate.getMinutes()).padStart(2, '0');
-                    effectiveTime = `${hours}:${minutes}`;
-                } else {
-                    effectiveTime = ticket.time;
-                }
-                
-                const localDateString = getLocalDateString(displayDate);
+                return history.map(historyEntry => {
+                    const timestamp = historyEntry.timestamp;
+                    const hasTime = timestamp.includes('T');
+                    
+                    const displayDate = hasTime ? new Date(timestamp) : new Date(`${timestamp}T00:00:00`);
 
-                return {
-                    ...ticket,
-                    contactId: contact.id,
-                    contactName: contact.name,
-                    date: localDateString, 
-                    time: effectiveTime, 
-                };
+                    let effectiveTime: string | undefined;
+                    if (hasTime) {
+                        const hours = String(displayDate.getHours()).padStart(2, '0');
+                        const minutes = String(displayDate.getMinutes()).padStart(2, '0');
+                        effectiveTime = `${hours}:${minutes}`;
+                    } else {
+                        // FIX: This commit resolves TypeScript errors by refactoring the component to be fully compatible with the `statusHistory`-based data model. It removes dependencies on deprecated `status` and `date` properties by creating a robust fallback mechanism for older `JobTicket` data. The logic for determining an event's effective time has also been improved to prevent reliance on the non-existent `ticket.time` property, ensuring data consistency and eliminating type errors.
+                        // For all-day events, check if any history entry for the ticket has a time,
+                        // especially for scheduled statuses.
+                        if (historyEntry.status === 'Scheduled' || historyEntry.status === 'Estimate Scheduled') {
+                            const timeEntry = ticket.statusHistory?.find(h => h.timestamp.includes('T'));
+                            if (timeEntry) {
+                                effectiveTime = timeEntry.timestamp.split('T')[1].substring(0,5);
+                            }
+                        }
+                    }
+                    
+                    const localDateString = getLocalDateString(displayDate);
+
+                    return {
+                        ...ticket, // Spread original ticket for properties like paymentStatus
+                        contactId: contact.id,
+                        contactName: contact.name,
+                        eventId: `${ticket.id}-${historyEntry.id}`, // Create a unique ID for the event
+                        status: historyEntry.status,
+                        date: localDateString, 
+                        time: effectiveTime,
+                        notes: historyEntry.notes || ticket.notes, // Prefer status-specific notes
+                    };
+                });
             })
         );
     }, [contacts]);
 
-    const jobsByDate = useMemo(() => {
-        const map: Record<string, JobEvent[]> = {};
-        allJobs.forEach(job => {
-            if (job.date) {
-                if (!map[job.date]) {
-                    map[job.date] = [];
+
+    const eventsByDate = useMemo(() => {
+        const map: Record<string, CalendarEvent[]> = {};
+        allEvents.forEach(event => {
+            if (event.date) {
+                if (!map[event.date]) {
+                    map[event.date] = [];
                 }
-                map[job.date].push(job);
+                map[event.date].push(event);
             }
         });
         return map;
-    }, [allJobs]);
+    }, [allEvents]);
 
     const getDaysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
     const getFirstDayOfMonth = (y: number, m: number) => new Date(y, m, 1).getDay();
@@ -91,7 +118,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ onViewJob, onAddJob }) => {
     const weeksCount = Math.ceil(calendarDays.length / 7);
 
     const selectedDateString = getLocalDateString(selectedDate);
-    const selectedDateJobs = jobsByDate[selectedDateString] || [];
+    const selectedDateEvents = eventsByDate[selectedDateString] || [];
 
     const handlePrevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
     const handleNextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
@@ -153,7 +180,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ onViewJob, onAddJob }) => {
                              if (!day) return <div key={`empty-${index}`} className="bg-white dark:bg-slate-800 min-h-[80px]"></div>;
                              
                              const dateString = getLocalDateString(day);
-                             const jobs = jobsByDate[dateString] || [];
+                             const events = eventsByDate[dateString] || [];
                              const isSelected = day.toDateString() === selectedDate.toDateString();
                              const isToday = day.toDateString() === new Date().toDateString();
 
@@ -163,22 +190,28 @@ const CalendarView: React.FC<CalendarViewProps> = ({ onViewJob, onAddJob }) => {
                                         <span className={`text-sm font-medium w-6 h-6 flex items-center justify-center rounded-full ${isToday ? 'bg-sky-500 text-white' : 'text-slate-700 dark:text-slate-300'}`}>
                                             {day.getDate()}
                                         </span>
-                                        {jobs.length > 0 && <span className="text-xs font-bold text-slate-400 md:hidden">{jobs.length}</span>}
+                                        {events.length > 0 && <span className="text-xs font-bold text-slate-400 md:hidden">{events.length}</span>}
                                     </div>
                                     
                                     <div className="mt-1 space-y-1 flex-grow relative">
                                         <div className="flex flex-wrap gap-1 md:hidden justify-center mt-1">
-                                            {jobs.slice(0, 4).map(job => <div key={job.id} className={`w-1.5 h-1.5 rounded-full ${jobStatusColors[job.status].base.split(' ')[0].replace('bg-', 'bg-').replace('100', '400')}`}></div>)}
-                                             {jobs.length > 4 && <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>}
+                                            {events.slice(0, 4).map(event => {
+                                                const statusStyle = jobStatusColors[event.status] || jobStatusColors['Scheduled'];
+                                                return <div key={event.eventId} className={`w-1.5 h-1.5 rounded-full ${statusStyle.base.split(' ')[0].replace('bg-', 'bg-').replace('100', '400')}`}></div>
+                                            })}
+                                             {events.length > 4 && <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>}
                                         </div>
                                         <div className="hidden md:flex flex-col gap-1">
-                                            {jobs.slice(0, 4).map(job => (
-                                                <div key={job.id} className={`text-[10px] px-1.5 py-0.5 rounded truncate border border-opacity-10 ${jobStatusColors[job.status].base} ${jobStatusColors[job.status].text}`}>
-                                                     <span className="font-semibold mr-1">{job.time ? formatTime(job.time) : ''}</span>
-                                                     {job.contactName}
-                                                </div>
-                                            ))}
-                                            {jobs.length > 4 && <span className="text-xs text-slate-400 pl-1">+{jobs.length - 4} more</span>}
+                                            {events.slice(0, 4).map(event => {
+                                                const statusStyle = jobStatusColors[event.status] || jobStatusColors['Scheduled'];
+                                                return (
+                                                    <div key={event.eventId} className={`text-[10px] px-1.5 py-0.5 rounded truncate border border-opacity-10 ${statusStyle.base} ${statusStyle.text}`}>
+                                                         <span className="font-semibold mr-1">{event.time ? formatTime(event.time) : ''}</span>
+                                                         {event.contactName}
+                                                    </div>
+                                                );
+                                            })}
+                                            {events.length > 4 && <span className="text-xs text-slate-400 pl-1">+{events.length - 4} more</span>}
                                         </div>
                                     </div>
                                 </div>
@@ -199,31 +232,32 @@ const CalendarView: React.FC<CalendarViewProps> = ({ onViewJob, onAddJob }) => {
                         </button>
                     </div>
                     <div className="p-4 flex-grow overflow-y-auto">
-                        {selectedDateJobs.length > 0 ? (
+                        {selectedDateEvents.length > 0 ? (
                             <ul className="space-y-3">
-                                {selectedDateJobs.sort((a,b) => (a.time || '00:00').localeCompare(b.time || '00:00')).map(job => {
-                                     const paymentStatus = job.paymentStatus || 'unpaid';
+                                {selectedDateEvents.sort((a,b) => (a.time || '00:00').localeCompare(b.time || '00:00')).map(event => {
+                                     const paymentStatus = event.paymentStatus || 'unpaid';
                                      const paymentStatusColor = paymentStatusColors[paymentStatus];
                                      const paymentStatusLabel = paymentStatusLabels[paymentStatus];
+                                     const statusStyle = jobStatusColors[event.status] || jobStatusColors['Scheduled'];
 
                                      return (
-                                        <li key={job.id} onClick={() => onViewJob(job.contactId, job.id)} className="p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:border-sky-500 dark:hover:border-sky-500 cursor-pointer transition-all">
+                                        <li key={event.eventId} onClick={() => onViewJob(event.contactId, event.id)} className="p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm hover:border-sky-500 dark:hover:border-sky-500 cursor-pointer transition-all">
                                             <div className="flex justify-between items-start mb-1">
                                                 <div className="flex flex-wrap gap-1">
-                                                    <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide rounded-full ${jobStatusColors[job.status].base} ${jobStatusColors[job.status].text}`}>{job.status}</span>
+                                                    <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide rounded-full ${statusStyle.base} ${statusStyle.text}`}>{event.status}</span>
                                                     <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide rounded-full ${paymentStatusColor.base} ${paymentStatusColor.text}`}>{paymentStatusLabel}</span>
                                                 </div>
-                                                <span className="text-xs font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap ml-2">{job.time ? formatTime(job.time) : 'No Time'}</span>
+                                                <span className="text-xs font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap ml-2">{event.time ? formatTime(event.time) : 'No Time'}</span>
                                             </div>
-                                            <p className="font-semibold text-slate-800 dark:text-slate-100 mt-1">{job.contactName}</p>
-                                            {job.notes && <p className="text-sm text-slate-500 dark:text-slate-400 truncate mt-1">{job.notes}</p>}
+                                            <p className="font-semibold text-slate-800 dark:text-slate-100 mt-1">{event.contactName}</p>
+                                            {event.notes && <p className="text-sm text-slate-500 dark:text-slate-400 truncate mt-1">{event.notes}</p>}
                                         </li>
                                     );
                                 })}
                             </ul>
                         ) : (
                             <div className="py-8">
-                                <EmptyState Icon={BriefcaseIcon} title="No Jobs" message="No jobs scheduled for this day." />
+                                <EmptyState Icon={BriefcaseIcon} title="No Events" message="No jobs or events scheduled for this day." />
                             </div>
                         )}
                     </div>

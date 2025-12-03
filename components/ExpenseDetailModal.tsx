@@ -2,12 +2,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Expense, ExpenseCategory, ExpenseLineItem, ALL_EXPENSE_CATEGORIES, BankTransaction } from '../types.ts';
 import { XIcon, FileIcon, TrashIcon, PlusIcon, LinkIcon } from './icons.tsx';
 import { generateId } from '../utils.ts';
-import { useData } from '../contexts/DataContext.tsx';
+import { useFinance } from '../contexts/FinanceContext.tsx';
 import TransactionLinkerModal from './TransactionLinkerModal.tsx';
 
 interface ExpenseFormModalProps {
   expense: Expense;
-  onSave: (expense: Expense) => void;
+  onSave: (expense: Expense, runReconciliation?: boolean) => void;
   onDelete: (expenseId: string) => void;
   onClose: () => void;
 }
@@ -15,7 +15,7 @@ interface ExpenseFormModalProps {
 const EDITABLE_CATEGORIES = ALL_EXPENSE_CATEGORIES.filter(c => c !== 'Mileage' && c !== 'Uncategorized');
 
 const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({ expense, onSave, onDelete, onClose }) => {
-  const { bankTransactions, handleSaveBankTransactions } = useData();
+  const { bankTransactions, handleSaveBankTransactions, handleUnlinkExpense } = useFinance();
   const [vendor, setVendor] = useState('');
   const [date, setDate] = useState('');
   const [total, setTotal] = useState<number | ''>('');
@@ -67,17 +67,15 @@ const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({ expense, onSave, on
 
   const handleLink = (txnIds: string[]) => {
     const updatedExpense = { ...expense, isReconciled: true, bankTransactionIds: txnIds, isDeferred: false };
-    onSave(updatedExpense);
+    onSave(updatedExpense, false); // Pass false to prevent reconciliation race condition
     const txnsToUpdate = bankTransactions.filter(t => txnIds.includes(t.id)).map(t => ({ ...t, isReconciled: true }));
     handleSaveBankTransactions(txnsToUpdate);
     setIsLinkerOpen(false);
   };
 
   const handleUnlink = () => {
-    const updatedExpense = { ...expense, isReconciled: false, bankTransactionIds: [] };
-    onSave(updatedExpense);
-    const txnsToUpdate = bankTransactions.filter(t => expense.bankTransactionIds?.includes(t.id)).map(t => ({ ...t, isReconciled: false }));
-    if (txnsToUpdate.length) handleSaveBankTransactions(txnsToUpdate);
+    handleUnlinkExpense(expense);
+    onClose();
   };
 
   const unreconciledDebits = useMemo(() => bankTransactions.filter(t => t.amount < 0 && !t.isReconciled), [bankTransactions]);

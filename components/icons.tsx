@@ -282,3 +282,9 @@ export const BuildingStorefrontIcon: React.FC<IconProps> = ({ className = 'w-6 h
         <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5A.75.75 0 0 1 14.25 12h.01a.75.75 0 0 1 .75.75v7.5m-3.75 0v-7.5a.75.75 0 0 1 .75-.75h.01a.75.75 0 0 1 .75.75v7.5m-3.75 0v-7.5a.75.75 0 0 1 .75-.75h.01a.75.75 0 0 1 .75.75v7.5M3 13.5v7.5a.75.75 0 0 0 .75.75h3a.75.75 0 0 0 .75-.75v-7.5a.75.75 0 0 0-.75-.75h-3a.75.75 0 0 0-.75.75Zm1.5-4.5a.75.75 0 0 0-.75.75v7.5a.75.75 0 0 0 .75.75h3a.75.75 0 0 0 .75-.75v-7.5a.75.75 0 0 0-.75-.75h-3ZM21 13.5v7.5a.75.75 0 0 1-.75.75h-3a.75.75 0 0 1-.75-.75v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75Zm-1.5-4.5a.75.75 0 0 1 .75.75v7.5a.75.75 0 0 1-.75.75h-3a.75.75 0 0 1-.75-.75v-7.5a.75.75 0 0 1 .75-.75h3ZM15.75 3v18M8.25 3v18m-3-18h12.75a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5H5.25A1.5 1.5 0 0 1 3.75 16.5v-12A1.5 1.5 0 0 1 5.25 3Z" />
     </svg>
 );
+
+export const RefreshIcon: React.FC<IconProps> = ({ className = 'w-6 h-6' }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 11.664 0l3.181-3.183m-3.181-3.183-3.181-3.182a8.25 8.25 0 0 0-11.664 0l-3.181 3.182" />
+    </svg>
+);

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useData } from '../contexts/DataContext.tsx';
+import { useContacts } from '../contexts/ContactContext.tsx';
 import { SearchIcon, PlusIcon, XIcon } from './icons.tsx';
 import { getInitials } from '../utils.ts';
 
@@ -11,7 +11,7 @@ interface ContactSelectorModalProps {
 }
 
 const ContactSelectorModal: React.FC<ContactSelectorModalProps> = ({ onSelect, onNewContact, onClose, selectedDate }) => {
-  const { contacts } = useData();
+  const { contacts } = useContacts();
   const [searchQuery, setSearchQuery] = useState('');
 
   const filteredContacts = (contacts || []).filter(contact => {

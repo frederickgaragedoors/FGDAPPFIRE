@@ -1,8 +1,9 @@
 
+
 import React, { useState, useEffect, useMemo } from 'react';
-import { useData } from '../contexts/DataContext.tsx';
+import { useContacts } from '../contexts/ContactContext.tsx';
 import ContactListItem from './ContactListItem.tsx';
-import { SearchIcon } from './icons.tsx';
+import { SearchIcon, ChevronLeftIcon, ChevronRightIcon } from './icons.tsx';
 
 interface ContactListProps {
   selectedContactId: string | null;
@@ -10,14 +11,17 @@ interface ContactListProps {
   onAddJob: (contactId: string) => void;
 }
 
+const ITEMS_PER_PAGE = 20;
+
 const ContactList: React.FC<ContactListProps> = ({ 
     selectedContactId, 
     onSelectContact,
     onAddJob
 }) => {
-  const { contacts } = useData();
+  const { contacts } = useContacts();
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState(searchQuery);
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -59,6 +63,19 @@ const ContactList: React.FC<ContactListProps> = ({
     });
   }, [contacts, debouncedQuery]);
 
+  const { paginatedContacts, totalPages } = useMemo(() => {
+    const totalPages = Math.ceil(sortedAndFilteredContacts.length / ITEMS_PER_PAGE);
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    const paginated = sortedAndFilteredContacts.slice(startIndex, endIndex);
+    return { paginatedContacts: paginated, totalPages };
+  }, [sortedAndFilteredContacts, currentPage]);
+  
+  // Reset page when search query changes
+  useEffect(() => {
+      setCurrentPage(1);
+  }, [debouncedQuery]);
+
 
   return (
     <div className="h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 flex flex-col">
@@ -77,8 +94,8 @@ const ContactList: React.FC<ContactListProps> = ({
         </div>
       </div>
       <ul className="overflow-y-auto flex-grow divide-y divide-slate-100 dark:divide-slate-700/50">
-        {sortedAndFilteredContacts.length > 0 ? (
-          sortedAndFilteredContacts.map((contact, index) => (
+        {paginatedContacts.length > 0 ? (
+          paginatedContacts.map((contact, index) => (
             <ContactListItem
               key={contact.id}
               contact={contact}
@@ -94,6 +111,27 @@ const ContactList: React.FC<ContactListProps> = ({
           </div>
         )}
       </ul>
+       {totalPages > 1 && (
+        <div className="p-2 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between text-sm text-slate-600 dark:text-slate-400 flex-shrink-0">
+            <button 
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="p-2 rounded-md disabled:opacity-50 hover:bg-slate-100 dark:hover:bg-slate-700"
+                aria-label="Previous page"
+            >
+                <ChevronLeftIcon className="w-5 h-5" />
+            </button>
+            <span>Page {currentPage} of {totalPages}</span>
+            <button 
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="p-2 rounded-md disabled:opacity-50 hover:bg-slate-100 dark:hover:bg-slate-700"
+                aria-label="Next page"
+            >
+                <ChevronRightIcon className="w-5 h-5" />
+            </button>
+        </div>
+      )}
     </div>
   );
 };

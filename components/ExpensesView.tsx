@@ -1,6 +1,7 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { GoogleGenAI, Type } from "@google/genai";
-import { useData } from '../contexts/DataContext.tsx';
+import { useFinance } from '../contexts/FinanceContext.tsx';
+import { useApp } from '../contexts/AppContext.tsx';
 import { useNotifications } from '../contexts/NotificationContext.tsx';
 import { Expense, ExpenseCategory, BankTransaction, BankStatement, ALL_EXPENSE_CATEGORIES } from '../types.ts';
 import EmptyState from './EmptyState.tsx';
@@ -62,10 +63,11 @@ const PayableMatchingModal: React.FC<{
 
 const ExpensesView: React.FC = () => {
     const { 
-        expenses, bankTransactions, bankStatements, businessInfo, categorizationRules,
+        expenses, bankTransactions, bankStatements,
         handleSaveExpenses, handleDeleteExpense, handleImportBankStatement, 
         handleSaveBankTransactions, handleDeleteBankStatement, runManualReconciliation
-    } = useData();
+    } = useFinance();
+    const { businessInfo, categorizationRules } = useApp();
     const { addNotification } = useNotifications();
     const [isProcessing, setIsProcessing] = useState(false);
     const [progress, setProgress] = useState({ current: 0, total: 0 });
@@ -127,14 +129,19 @@ const ExpensesView: React.FC = () => {
                     config: { responseMimeType: 'application/json' },
                 });
                 
-                const data = JSON.parse(response.text.trim());
-                newExpenses.push({
-                    id: generateId(), vendor: data.vendor || 'Unknown', date: data.date || new Date().toISOString().split('T')[0],
-                    total: data.total || 0, tax: data.tax || 0,
-                    lineItems: (data.lineItems || []).map((item: any) => ({ ...item, id: generateId() })),
-                    receiptDataUrl: dataUrl, receiptUrl: dataUrl, receiptHash: fileHash, createdAt: new Date().toISOString(), isReconciled: false,
-                });
-                existingHashes.add(fileHash); // Add to set to catch duplicates within the same upload batch
+                try {
+                    const data = JSON.parse(response.text.trim());
+                    newExpenses.push({
+                        id: generateId(), vendor: data.vendor || 'Unknown', date: data.date || new Date().toISOString().split('T')[0],
+                        total: data.total || 0, tax: data.tax || 0,
+                        lineItems: (data.lineItems || []).map((item: any) => ({ ...item, id: generateId() })),
+                        receiptDataUrl: dataUrl, receiptUrl: dataUrl, receiptHash: fileHash, createdAt: new Date().toISOString(), isReconciled: false,
+                    });
+                    existingHashes.add(fileHash);
+                } catch (jsonParseError: any) {
+                    setErrors(prev => [...prev, `Failed to parse JSON for ${file.name}. AI Response: ${response.text}`]);
+                    continue;
+                }
             } catch (err: any) { setErrors(prev => [...prev, `Error processing ${file.name}: ${err.message}`]); }
             
             if (i < files.length - 1) await new Promise(resolve => setTimeout(resolve, 2000));
@@ -173,15 +180,33 @@ const ExpensesView: React.FC = () => {
     };
 
     const handleStatementImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0]; if (!file) return;
-        setIsProcessing(true); setProgress({ current: 1, total: 1 }); setErrors([]);
-        const { success, error } = await handleImportBankStatement(file);
-        if (!success && error) {
-             setErrors([error]);
-             addNotification(error, 'error');
-        } else if (success) {
-            addNotification('Bank statement imported successfully.', 'success');
+        const files = e.target.files; if (!files || files.length === 0) return;
+        setIsProcessing(true);
+        setProgress({ current: 0, total: files.length });
+        setErrors([]);
+        let successfulImports = 0;
+        let importErrors: string[] = [];
+        
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            setProgress({ current: i + 1, total: files.length });
+            const { success, error } = await handleImportBankStatement(file);
+            if (success) {
+                successfulImports++;
+            } else if (error) {
+                importErrors.push(error);
+            }
         }
+
+        setErrors(importErrors);
+
+        if (successfulImports > 0) {
+            addNotification(`Successfully imported ${successfulImports} bank statement(s).`, 'success');
+        }
+        if (importErrors.length > 0) {
+            addNotification(`Failed to import ${importErrors.length} statement(s).`, 'error');
+        }
+
         setIsProcessing(false);
         if (statementInputRef.current) statementInputRef.current.value = '';
     };
@@ -341,13 +366,13 @@ const ExpensesView: React.FC = () => {
                 </div>
                 <div className="flex gap-2">
                     <input type="file" multiple accept="image/*,application/pdf" ref={receiptInputRef} onChange={handleFileImport} className="hidden" />
-                    <input type="file" accept=".csv,.pdf" ref={statementInputRef} onChange={handleStatementImport} className="hidden" />
+                    <input type="file" multiple accept=".csv,.pdf" ref={statementInputRef} onChange={handleStatementImport} className="hidden" />
                     <button onClick={() => statementInputRef.current?.click()} className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600"><UploadIcon className="w-4 h-4" />Bank CSV/PDF</button>
                     <button onClick={() => receiptInputRef.current?.click()} className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-white bg-sky-500 hover:bg-sky-600"><UploadIcon className="w-4 h-4" />Receipts</button>
                 </div>
             </div>
 
-            <div className="p-4 sm:p-6 flex-grow">
+            <div className="p-4 sm:p-6 flex-grow space-y-6">
                 {expenses.length === 0 && bankTransactions.length === 0 ? (
                     <EmptyState Icon={CurrencyDollarIcon} title="No Expenses or Transactions" message="Get started by importing receipts or a bank statement." />
                 ) : (
@@ -364,7 +389,7 @@ const ExpensesView: React.FC = () => {
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                 <StatCard title="Awaiting Payment" value={`${reconciliationStats.payablesCount}`} subtext={`Totaling $${reconciliationStats.payablesTotal.toFixed(2)}`} />
                                 <StatCard title="Unreconciled Receipts" value={`${reconciliationStats.unreconciledExpensesCount}`} subtext={`Totaling $${reconciliationStats.unreconciledExpensesTotal.toFixed(2)}`} 
-                                    action={<button onClick={runManualReconciliation} className="px-3 py-1 bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300 text-sm rounded-md hover:bg-sky-200">Run Reconciliation</button>}
+                                    action={<button onClick={() => runManualReconciliation()} className="px-3 py-1 bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300 text-sm rounded-md hover:bg-sky-200">Run Reconciliation</button>}
                                 />
                                 <StatCard title="Unmatched Bank Debits" value={`${reconciliationStats.unmatchedBankTxnsCount}`} subtext={`Totaling $${reconciliationStats.unmatchedBankTxnsTotal.toFixed(2)}`} />
                             </div>
@@ -388,7 +413,7 @@ const ExpensesView: React.FC = () => {
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                 <div>
                                     <h3 className="text-lg font-semibold mb-2">Unreconciled Receipts ({reconciliationStats.unreconciledExpensesCount})</h3>
-                                    <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border max-h-96 overflow-y-auto">
+                                    <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border max-h-[60vh] overflow-y-auto">
                                         <table className="w-full text-left"><tbody>{reconciliationStats.unreconciledExpenses.map(e => <ExpenseRow key={e.id} item={e}/>)}</tbody></table>
                                     </div>
                                 </div>
@@ -397,7 +422,7 @@ const ExpensesView: React.FC = () => {
                                         <h3 className="text-lg font-semibold">Unmatched Bank Transactions ({reconciliationStats.unmatchedBankTxnsCount})</h3>
                                         <button onClick={applyCategorizationRules} className="px-3 py-1 bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300 text-sm rounded-md hover:bg-sky-200">Apply Rules</button>
                                     </div>
-                                    <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border max-h-96 overflow-y-auto">
+                                    <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border max-h-[60vh] overflow-y-auto">
                                         <table className="w-full text-left">
                                             <tbody>
                                                 {reconciliationStats.unmatchedBankTxns.map(t => (
@@ -480,11 +505,11 @@ const ExpensesView: React.FC = () => {
                 <ExpenseFormModal 
                     expense={editingExpense} 
                     onClose={() => { setEditingExpense(null); handleCancelReview(); }} 
-                    onSave={(exp) => {
+                    onSave={(exp, runRecon) => {
                         if (expensesToReview.length > 0) {
                             handleSaveFromReview(exp);
                         } else {
-                            handleSaveExpenses([exp]);
+                            handleSaveExpenses([exp], runRecon);
                             setEditingExpense(null);
                         }
                     }}

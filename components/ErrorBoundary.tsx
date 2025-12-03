@@ -11,15 +11,14 @@ interface State {
 }
 
 class ErrorBoundary extends Component<Props, State> {
-  // FIX: Replaced constructor with a class property for state initialization to resolve type errors.
   public state: State = {
     hasError: false,
     error: null,
     errorInfo: null,
   };
 
-  static getDerivedStateFromError(error: Error): Partial<State> {
-    return { hasError: true, error };
+  static getDerivedStateFromError(error: Error): State {
+    return { hasError: true, error, errorInfo: null };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {

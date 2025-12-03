@@ -1,10 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { DefaultFieldSetting, BusinessInfo, JobTemplate, JobStatus, ALL_JOB_STATUSES, EmailSettings, CatalogItem, DEFAULT_ON_MY_WAY_TEMPLATE, MapSettings, Theme, CategorizationRule, ExpenseCategory, ALL_EXPENSE_CATEGORIES, Supplier } from '../types.ts';
 import { ArrowLeftIcon, TrashIcon, PlusIcon, DownloadIcon, UploadIcon, UserCircleIcon, EditIcon, CalendarIcon, ChevronDownIcon, MapPinIcon, BuildingStorefrontIcon } from './icons.tsx';
 import { saveJsonFile, fileToDataUrl, generateICSContent, downloadICSFile, generateId } from '../utils.ts';
 import JobTemplateModal from './JobTemplateModal.tsx';
 import { useGoogleMaps } from '../hooks/useGoogleMaps.ts';
-import { useData } from '../contexts/DataContext.tsx';
+import { useContacts } from '../contexts/ContactContext.tsx';
+import { useFinance } from '../contexts/FinanceContext.tsx';
+import { useMileage } from '../contexts/MileageContext.tsx';
+import { useApp } from '../contexts/AppContext.tsx';
 import { useNotifications } from '../contexts/NotificationContext.tsx';
 import { auth } from '../firebase.ts';
 import { signOut } from 'firebase/auth';
@@ -45,6 +48,9 @@ interface SettingsProps {
 const RULE_CATEGORIES = ALL_EXPENSE_CATEGORIES.filter(c => c !== 'Uncategorized' && c !== 'Mileage');
 
 const Settings: React.FC<SettingsProps> = ({ onBack }) => {
+    const { contacts, restoreContacts } = useContacts();
+    const { expenses, bankTransactions, bankStatements, restoreFinanceData, handleDeleteAllBankData } = useFinance();
+    const { mileageLogs, restoreMileageLogs } = useMileage();
     const {
         defaultFields,
         businessInfo,
@@ -52,23 +58,59 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
         jobTemplates,
         partsCatalog,
         enabledStatuses,
-        contacts,
         showContactPhotos,
         mapSettings,
+        routes,
         user,
-        appStateForBackup,
         saveSettings,
         isGuestMode,
         onSwitchToCloud,
-        loadDemoData,
-        restoreBackup,
-        handleDeleteAllBankData,
         theme,
         setTheme,
         categorizationRules,
         handleSaveCategorizationRules,
-    } = useData();
+    } = useApp();
     const { addNotification } = useNotifications();
+
+    const appStateForBackup = useMemo(() => ({
+        contacts,
+        expenses,
+        bankTransactions,
+        bankStatements,
+        mileageLogs,
+        settings: {
+            defaultFields,
+            businessInfo,
+            emailSettings,
+            jobTemplates,
+            partsCatalog,
+            enabledStatuses,
+            mapSettings,
+            showContactPhotos,
+            routes,
+        },
+        categorizationRules,
+        version: '1.0'
+    }), [
+        contacts, expenses, bankTransactions, bankStatements, mileageLogs,
+        defaultFields, businessInfo, emailSettings, jobTemplates, partsCatalog, enabledStatuses, mapSettings, showContactPhotos, routes, categorizationRules
+    ]);
+
+    const restoreBackup = useCallback(async (backupContent: string) => {
+        const backupData = JSON.parse(backupContent);
+        if (!backupData.version || !backupData.contacts || !backupData.settings) {
+            throw new Error("Invalid or corrupted backup file.");
+        }
+        await restoreContacts(backupData.contacts || []);
+        await restoreFinanceData({
+            expenses: backupData.expenses || [],
+            bankTransactions: backupData.bankTransactions || [],
+            bankStatements: backupData.bankStatements || [],
+        });
+        await restoreMileageLogs(backupData.mileageLogs || []);
+        await saveSettings(backupData.settings || {});
+        await handleSaveCategorizationRules(backupData.categorizationRules || []);
+    }, [restoreContacts, restoreFinanceData, restoreMileageLogs, saveSettings, handleSaveCategorizationRules]);
     
     const [newFieldLabel, setNewFieldLabel] = useState('');
     const [currentBusinessInfo, setCurrentBusinessInfo] = useState<BusinessInfo>(businessInfo);
@@ -82,10 +124,10 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
     const [restoreFileContent, setRestoreFileContent] = useState<string | null>(null);
     const [isClearBankDataConfirmOpen, setIsClearBankDataConfirmOpen] = useState(false);
     const [currentRules, setCurrentRules] = useState<CategorizationRule[]>([]);
-    const [newRuleKeyword, setNewRuleKeyword] = useState('');
-    const [newRuleCategory, setNewRuleCategory] = useState<ExpenseCategory>('Other');
     const [newSupplierName, setNewSupplierName] = useState('');
     const [newSupplierAddress, setNewSupplierAddress] = useState('');
+    const [newRuleKeyword, setNewRuleKeyword] = useState('');
+    const [newRuleCategory, setNewRuleCategory] = useState<ExpenseCategory>('Other');
 
     const homeAddressRef = useRef<HTMLInputElement>(null);
     const supplierAddressRef = useRef<HTMLInputElement>(null);
@@ -129,12 +171,14 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
             const newFields = [...defaultFields, { id: generateId(), label: newFieldLabel.trim() }];
             saveSettings({ defaultFields: newFields });
             setNewFieldLabel('');
+            addNotification('Default field added.', 'success');
         }
     };
     
     const handleDeleteDefaultField = (id: string) => {
         const newFields = defaultFields.filter(f => f.id !== id);
         saveSettings({ defaultFields: newFields });
+        addNotification('Default field deleted.', 'success');
     };
     
     const handleBusinessInfoChange = (field: keyof BusinessInfo, value: any) => {
@@ -218,11 +262,13 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
         saveSettings({ jobTemplates: newTemplates });
         setIsTemplateModalOpen(false);
         setEditingTemplate(null);
+        addNotification('Job template saved.', 'success');
     };
 
     const handleDeleteJobTemplate = (id: string) => {
         const newTemplates = jobTemplates.filter(jt => jt.id !== id);
         saveSettings({ jobTemplates: newTemplates });
+        addNotification('Job template deleted.', 'success');
     };
 
     const handleAddCatalogItem = (e: React.FormEvent) => {
@@ -232,12 +278,14 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
             saveSettings({ partsCatalog: newCatalog });
             setNewCatalogItemName('');
             setNewCatalogItemCost('');
+            addNotification('Part added to catalog.', 'success');
         }
     };
     
     const handleDeleteCatalogItem = (id: string) => {
         const newCatalog = partsCatalog.filter(i => i.id !== id);
         saveSettings({ partsCatalog: newCatalog });
+        addNotification('Part deleted from catalog.', 'success');
     };
     
     const handleToggleJobStatus = (status: JobStatus, enabled: boolean) => {
@@ -359,22 +407,6 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
                                 Sign Out
                             </button>
                         )}
-                    </div>
-                </div>
-
-                {/* Demo Data Section */}
-                <div className="mb-8 p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div>
-                            <h3 className="text-lg font-bold text-indigo-900 dark:text-indigo-100">⚡ Quick Start: Demo Data</h3>
-                            <p className="text-sm text-indigo-700 dark:text-indigo-300">Populate the app with sample contacts and jobs to test features.</p>
-                        </div>
-                        <button
-                            onClick={loadDemoData}
-                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-md shadow-sm transition-colors whitespace-nowrap"
-                        >
-                            Load Demo Data
-                        </button>
                     </div>
                 </div>
 
@@ -599,7 +631,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
 
                  <SettingsSection title="Job Status Visibility" subtitle="Choose which statuses appear in the dropdown menu.">
                     <div className="mt-2 space-y-3">
-                         {ALL_JOB_STATUSES.map((status) => (
+                         {ALL_JOB_STATUSES.filter(s => s !== 'Job Created').map((status) => (
                             <div key={status} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
                                 <span className="font-medium text-slate-700 dark:text-slate-200">{status}</span>
                                 <button
@@ -761,6 +793,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
                     onConfirm={() => {
                         handleDeleteAllBankData();
                         setIsClearBankDataConfirmOpen(false);
+                        addNotification('All bank data has been cleared.', 'success');
                     }}
                     title="Clear All Bank Data"
                     message="Are you sure you want to delete ALL bank statements and transactions? This will also unreconcile any linked expenses. This action cannot be undone."

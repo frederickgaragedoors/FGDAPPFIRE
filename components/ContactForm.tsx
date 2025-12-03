@@ -1,10 +1,11 @@
-
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Contact, FileAttachment, CustomField, DefaultFieldSetting, JobTicket, DoorProfile } from '../types.ts';
-import { useData } from '../contexts/DataContext.tsx';
+import { Contact, FileAttachment, CustomField, DefaultFieldSetting, JobTicket, DoorProfile, StatusHistoryEntry } from '../types.ts';
+import { useContacts } from '../contexts/ContactContext.tsx';
+import { useApp } from '../contexts/AppContext.tsx';
+import { useNotifications } from '../contexts/NotificationContext.tsx';
 import { UserCircleIcon, ArrowLeftIcon, FileIcon, TrashIcon, PlusIcon } from './icons.tsx';
 import { fileToDataUrl, formatFileSize, generateId } from '../utils.ts';
-import { useGoogleMaps } from '../hooks/useGoogleMaps.ts';
+import { useGoogleMaps } from '../hooks/useGoogleMaps';
 
 // Declare google for TS
 declare const google: any;
@@ -16,7 +17,9 @@ interface ContactFormProps {
 }
 
 const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onCancel, initialJobDate }) => {
-  const { handleSaveContact, defaultFields, mapSettings } = useData();
+  const { handleSaveContact } = useContacts();
+  const { defaultFields, mapSettings } = useApp();
+  const { addNotification } = useNotifications();
   const apiKey = mapSettings?.apiKey;
 
   const [name, setName] = useState(initialContact?.name || '');
@@ -98,11 +101,11 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onCancel, ini
         newFileObjects.current['profile_photo'] = file; // Use a special key for the profile photo
       } catch (error) {
         console.error("Error reading photo:", error);
-        alert("There was an error processing the photo. It might be too large or corrupted.");
+        addNotification("Error processing photo: it may be too large or corrupted.", 'error');
       }
     }
     input.value = '';
-  }, []);
+  }, [addNotification]);
 
   const handleFilesChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const input = e.target;
@@ -124,11 +127,11 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onCancel, ini
         setStagedFiles(prevFiles => [...prevFiles, ...newFiles]);
       } catch (error) {
         console.error("Error reading files:", error);
-        alert("There was an error processing your files. They might be too large or corrupted.");
+        addNotification("Error processing files: they may be too large or corrupted.", 'error');
       }
     }
     input.value = '';
-  }, []);
+  }, [addNotification]);
 
   const removeFile = (id: string, isStaged: boolean) => {
     if (isStaged) {
@@ -208,16 +211,24 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onCancel, ini
     
     let initialJobTickets: JobTicket[] = initialContact?.jobTickets || [];
     
+    // FIX: Updated the creation of initial job tickets to use the `statusHistory` array instead of the deprecated `date` and `status` properties. This ensures new contacts created with a scheduled job conform to the current data model, preventing downstream errors and maintaining data consistency.
     if (initialJobDate && !initialContact) {
         const actualDate = initialJobDate.split('_')[0];
+        const createdAt = new Date().toISOString();
+        const scheduledTimestamp = new Date(`${actualDate}T09:00:00`).toISOString(); // Default to 9am
+        
+        const statusHistory: StatusHistoryEntry[] = [
+            { id: generateId(), status: 'Job Created', timestamp: createdAt, notes: 'Contact and job created simultaneously.' },
+            { id: generateId(), status: 'Estimate Scheduled', timestamp: scheduledTimestamp, notes: '' }
+        ];
+
         initialJobTickets = [{
             id: generateId(),
-            date: actualDate,
-            status: 'Estimate Scheduled',
+            createdAt: createdAt,
+            statusHistory: statusHistory,
             notes: '',
             parts: [],
-            laborCost: 0,
-            createdAt: new Date().toISOString()
+            laborCost: 0
         }];
     }
 

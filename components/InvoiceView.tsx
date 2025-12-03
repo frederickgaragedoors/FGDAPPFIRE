@@ -1,6 +1,8 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { Contact, JobTicket, FileAttachment, ViewState, SafetyInspection } from '../types.ts';
-import { useData } from '../contexts/DataContext.tsx';
+import { useContacts } from '../contexts/ContactContext.tsx';
+import { useApp } from '../contexts/AppContext.tsx';
+import { useNotifications } from '../contexts/NotificationContext.tsx';
 import { ArrowLeftIcon, MailIcon, ShareIcon } from './icons.tsx';
 import { generateId, fileToDataUrl, calculateJobTicketTotal, processTemplate, formatPhoneNumber } from '../utils.ts';
 import { generatePdf } from '../services/pdfGenerator.ts';
@@ -13,7 +15,9 @@ interface InvoiceViewProps {
 }
 
 const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, onClose }) => {
-    const { contacts, businessInfo, emailSettings, handleAddFilesToContact } = useData();
+    const { contacts, handleAddFilesToContact } = useContacts();
+    const { businessInfo, emailSettings } = useApp();
+    const { addNotification } = useNotifications();
     const contact = contacts.find(c => c.id === contactId);
     const ticket = contact?.jobTickets.find(t => t.id === ticketId);
 
@@ -72,6 +76,15 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
         inspection.items.some(i => ['Pass', 'Fail', 'Repaired'].includes(i.status || 'N/A'))
     );
 
+    const jobDate = useMemo(() => {
+        if (!ticket.statusHistory || ticket.statusHistory.length === 0) {
+            return new Date();
+        }
+        const sortedHistory = [...ticket.statusHistory].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        return new Date(sortedHistory[0].timestamp);
+    }, [ticket.statusHistory]);
+
+
     const handleDownload = async () => {
         if (isSaving) return;
         setIsSaving(true);
@@ -82,7 +95,7 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
             }
         } catch (error) {
             console.error("Failed to download PDF:", error);
-            alert("Could not generate PDF for download.");
+            addNotification("Could not generate PDF for download.", "error");
         } finally {
             setIsSaving(false);
         }
@@ -108,14 +121,14 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
                 const pdfUrl = URL.createObjectURL(pdfBlob);
                 const printWindow = window.open(pdfUrl, '_blank');
                 if (!printWindow) {
-                    alert("Pop-up blocked. Please allow pop-ups for this site to view the print preview.");
+                    addNotification("Pop-up blocked. Please allow pop-ups to view the print preview.", "info");
                 }
             } else {
-                 alert("Could not generate PDF for printing.");
+                 addNotification("Could not generate PDF for printing.", "error");
             }
         } catch (error) {
             console.error("Failed to generate PDF for printing:", error);
-            alert("Could not generate PDF for printing.");
+            addNotification("Could not generate PDF for printing.", "error");
         } finally {
             setIsSaving(false);
         }
@@ -141,11 +154,11 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
                 };
                 const newFileObjects: { [id: string]: File } = { [newFileAttachment.id]: pdfFile };
                 await handleAddFilesToContact(contact.id, [newFileAttachment], newFileObjects);
-                alert('PDF attached successfully!');
+                addNotification('PDF attached successfully!', 'success');
             }
         } catch (error) {
             console.error("Error attaching PDF:", error);
-            alert("Failed to attach PDF.");
+            addNotification("Failed to attach PDF.", "error");
         } finally {
             setIsSaving(false);
         }
@@ -176,12 +189,12 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
                 setTimeout(() => {
                     const mailtoLink = `mailto:${contact.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
                     window.location.href = mailtoLink;
-                    alert("PDF downloaded. Opening email client... Please attach the PDF file to your email.");
+                    addNotification("PDF downloaded. Please attach it to your email.", "info");
                 }, 500);
             }
         } catch (error) {
             console.error("Failed to process email action:", error);
-            alert("Could not process email action.");
+            addNotification("Could not process email action.", "error");
         } finally {
             setIsSaving(false);
         }
@@ -217,12 +230,12 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
                      text: body,
                  });
              } else {
-                 alert("Sharing files is not supported on this device. Please use the Email or Download option.");
+                 addNotification("File sharing is not supported on this device. Use Email or Download instead.", "info");
              }
         } catch (error: any) {
             console.error("Share failed:", error);
              if (error.name !== 'AbortError') {
-                alert("Share failed. Please try downloading or using the Email button.");
+                addNotification("Share failed. Please try again.", "error");
             }
         } finally {
             setIsSaving(false);
@@ -330,7 +343,7 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
                                     <span className="font-semibold text-slate-600">Job ID:</span> {ticket.id}
                                 </p>
                                 <p>
-                                    <span className="font-semibold text-slate-600">Date:</span> {new Date(ticket.date).toLocaleDateString()}
+                                    <span className="font-semibold text-slate-600">Date:</span> {jobDate.toLocaleDateString()}
                                 </p>
                             </div>
                         </div>
