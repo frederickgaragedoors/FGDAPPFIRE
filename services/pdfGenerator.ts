@@ -68,6 +68,10 @@ export const generatePdf = async ({ contact, ticket, businessInfo, docType }: Ge
         inspection.items.some(i => ['Pass', 'Fail', 'Repaired'].includes(i.status || 'N/A'))
     );
     
+    const sortedHistory = (ticket.statusHistory || []).sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    const latestStatus = sortedHistory[0];
+    const jobDate = latestStatus ? new Date(latestStatus.timestamp) : new Date();
+
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 50;
@@ -152,7 +156,7 @@ export const generatePdf = async ({ contact, ticket, businessInfo, docType }: Ge
     doc.setTextColor(100);
     doc.text(`Job ID: ${ticket.id}`, rightColX, docInfoY, { align: 'right' });
     docInfoY += 14;
-    doc.text(`Date: ${new Date(ticket.date).toLocaleDateString()}`, rightColX, docInfoY, { align: 'right' });
+    doc.text(`Date: ${jobDate.toLocaleDateString()}`, rightColX, docInfoY, { align: 'right' });
     
     yPos += maxHeaderHeight + 20;
     
