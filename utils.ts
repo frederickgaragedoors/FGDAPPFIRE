@@ -1,4 +1,4 @@
-import { JobTicket, Contact } from './types.ts';
+import { JobTicket, Contact, StatusHistoryEntry } from './types.ts';
 
 /**
  * Generates a short, secure uppercase alphanumeric ID.
@@ -65,11 +65,11 @@ export const formatPhoneNumber = (phoneNumber: string | undefined): string => {
  * @param ticket The JobTicket object.
  * @returns An object with the detailed cost breakdown.
  */
-export const calculateJobTicketTotal = (ticket: JobTicket | null) => {
+export const calculateJobTicketTotal = (ticket: Partial<JobTicket> | null) => {
     if (!ticket) {
         return { subtotal: 0, taxAmount: 0, feeAmount: 0, totalCost: 0, deposit: 0, balanceDue: 0 };
     }
-    const partsTotal = ticket.parts.reduce((sum, part) => sum + (Number(part.cost || 0) * Number(part.quantity || 1)), 0);
+    const partsTotal = (ticket.parts || []).reduce((sum, part) => sum + (Number(part.cost || 0) * Number(part.quantity || 1)), 0);
     const subtotal = partsTotal + Number(ticket.laborCost || 0);
     const taxAmount = subtotal * (Number(ticket.salesTaxRate || 0) / 100);
     const totalAfterTaxes = subtotal + taxAmount;
@@ -167,68 +167,51 @@ export const saveJsonFile = async (data: object, filename: string): Promise<void
 export const generateICSContent = (contacts: Contact[]): string => {
     let icsContent = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Business Contacts Manager//EN\nCALSCALE:GREGORIAN\n";
 
-    const formatDate = (dateStr: string, timeStr?: string): string => {
-        const dateObj = new Date(dateStr);
-        const year = dateObj.getFullYear();
-        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-        const day = String(dateObj.getDate()).padStart(2, '0');
-        
-        if (timeStr) {
-            const [hours, minutes] = timeStr.split(':');
-            return `${year}${month}${day}T${hours}${minutes}00`;
-        }
-        return `${year}${month}${day}`;
-    };
+    const formatISODate = (iso: string) => iso.replace(/[-:]/g, '').split('.')[0] + 'Z';
+    const formatDateOnly = (iso: string) => iso.substring(0, 10).replace(/-/g, '');
 
     contacts.forEach(contact => {
         if (!contact.jobTickets) return;
         
         contact.jobTickets.forEach(ticket => {
-            if (!ticket.date) return;
+            if (!ticket.statusHistory) return;
 
-            const startDateTime = formatDate(ticket.date, ticket.time);
-            const isAllDay = !ticket.time;
+            ticket.statusHistory.forEach((entry: StatusHistoryEntry) => {
+                if (entry.status === 'Scheduled' || entry.status === 'Estimate Scheduled') {
+                    const startDate = new Date(entry.timestamp);
+                    const isAllDay = !entry.timestamp.includes('T');
+                    
+                    icsContent += "BEGIN:VEVENT\n";
+                    icsContent += `UID:${ticket.id}-${entry.id}@businesscontactsmanager\n`;
+                    icsContent += `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z\n`;
+                    
+                    if (isAllDay) {
+                        icsContent += `DTSTART;VALUE=DATE:${formatDateOnly(entry.timestamp)}\n`;
+                    } else {
+                        icsContent += `DTSTART:${formatISODate(entry.timestamp).slice(0, -1)}\n`;
+                        const durationMinutes = entry.duration || 60; // Default to 1 hour
+                        const endDate = new Date(startDate.getTime() + durationMinutes * 60000);
+                        icsContent += `DTEND:${formatISODate(endDate.toISOString()).slice(0, -1)}\n`;
+                    }
 
-            icsContent += "BEGIN:VEVENT\n";
-            icsContent += `UID:${ticket.id}@businesscontactsmanager\n`;
-            icsContent += `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z\n`;
-            
-            if (isAllDay) {
-                icsContent += `DTSTART;VALUE=DATE:${startDateTime}\n`;
-            } else {
-                icsContent += `DTSTART:${startDateTime}\n`;
-                // Default duration 1 hour if not specified
-                // Parsing date again to add hour for DTEND
-                const year = parseInt(startDateTime.substring(0,4));
-                const month = parseInt(startDateTime.substring(4,6)) - 1;
-                const day = parseInt(startDateTime.substring(6,8));
-                const hour = parseInt(startDateTime.substring(9,11));
-                const min = parseInt(startDateTime.substring(11,13));
-                const end = new Date(year, month, day, hour + 1, min);
-                const endYear = end.getFullYear();
-                const endMonth = String(end.getMonth() + 1).padStart(2, '0');
-                const endDay = String(end.getDate()).padStart(2, '0');
-                const endHour = String(end.getHours()).padStart(2, '0');
-                const endMin = String(end.getMinutes()).padStart(2, '0');
-                icsContent += `DTEND:${endYear}${endMonth}${endDay}T${endHour}${endMin}00\n`;
-            }
-
-            const summary = `${contact.name} - ${ticket.status}`;
-            let description = `Job ID: ${ticket.id}\\nStatus: ${ticket.status}\\n`;
-            if (ticket.notes) description += `Notes: ${ticket.notes.replace(/\n/g, '\\n')}\\n`;
-            if (contact.phone) description += `Phone: ${contact.phone}\\n`;
-            if (contact.email) description += `Email: ${contact.email}\\n`;
-            
-            icsContent += `SUMMARY:${summary}\n`;
-            icsContent += `DESCRIPTION:${description}\n`;
-            
-            // Use Job Location if available, otherwise Contact Address
-            const location = ticket.jobLocation || contact.address;
-            if (location) {
-                icsContent += `LOCATION:${location.replace(/\n/g, ', ')}\n`;
-            }
-            
-            icsContent += "END:VEVENT\n";
+                    const summary = `${contact.name} - ${entry.status}`;
+                    let description = `Job ID: ${ticket.id}\\nStatus: ${entry.status}\\n`;
+                    if (ticket.notes) description += `Job Notes: ${ticket.notes.replace(/\n/g, '\\n')}\\n`;
+                    if (entry.notes) description += `Status Notes: ${entry.notes.replace(/\n/g, '\\n')}\\n`;
+                    if (contact.phone) description += `Phone: ${contact.phone}\\n`;
+                    if (contact.email) description += `Email: ${contact.email}\\n`;
+                    
+                    icsContent += `SUMMARY:${summary}\n`;
+                    icsContent += `DESCRIPTION:${description}\n`;
+                    
+                    const location = ticket.jobLocation || contact.address;
+                    if (location) {
+                        icsContent += `LOCATION:${location.replace(/\n/g, ', ')}\n`;
+                    }
+                    
+                    icsContent += "END:VEVENT\n";
+                }
+            });
         });
     });
 
@@ -303,7 +286,7 @@ export const loadGoogleMapsScript = (apiKey: string): Promise<void> => {
 
     const script = document.createElement('script');
     script.id = scriptId;
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,directions`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,routes`;
     script.async = true;
     script.defer = true;
     

@@ -1,5 +1,6 @@
 
 
+
 export interface FileAttachment {
   id: string;
   name: string;
@@ -38,15 +39,17 @@ export interface DoorProfile {
   openerInstallDate: string; // YYYY-MM-DD, "Original", or "Unknown"
 }
 
-export type JobStatus = 'Estimate Scheduled' | 'Quote Sent' | 'Scheduled' | 'In Progress' | 'Awaiting Parts' | 'Completed' | 'Paid' | 'Declined';
+export type JobStatus = 'Job Created' | 'Estimate Scheduled' | 'Quote Sent' | 'Scheduled' | 'In Progress' | 'Awaiting Parts' | 'Supplier Run' | 'Completed' | 'Paid' | 'Declined';
 export type PaymentStatus = 'unpaid' | 'deposit_paid' | 'paid_in_full';
 
 export const jobStatusColors: Record<JobStatus, { base: string, text: string }> = {
+  'Job Created': { base: 'bg-gray-100 dark:bg-gray-800', text: 'text-gray-600 dark:text-gray-400' },
   'Estimate Scheduled': { base: 'bg-slate-200 dark:bg-slate-700', text: 'text-slate-700 dark:text-slate-200' },
   'Quote Sent': { base: 'bg-orange-100 dark:bg-orange-900', text: 'text-orange-800 dark:text-orange-200' },
   'Scheduled': { base: 'bg-sky-100 dark:bg-sky-900', text: 'text-sky-800 dark:text-sky-200' },
   'In Progress': { base: 'bg-yellow-100 dark:bg-yellow-900', text: 'text-yellow-800 dark:text-yellow-200' },
   'Awaiting Parts': { base: 'bg-purple-100 dark:bg-purple-900', text: 'text-purple-800 dark:text-purple-200' },
+  'Supplier Run': { base: 'bg-teal-100 dark:bg-teal-900', text: 'text-teal-800 dark:text-teal-200' },
   'Completed': { base: 'bg-green-100 dark:bg-green-900', text: 'text-green-800 dark:text-green-200' },
   'Paid': { base: 'bg-indigo-100 dark:bg-indigo-900', text: 'text-indigo-800 dark:text-indigo-200' },
   'Declined': { base: 'bg-red-100 dark:bg-red-900', text: 'text-red-800 dark:text-red-200' },
@@ -98,14 +101,10 @@ export interface StatusHistoryEntry {
 
 export interface JobTicket {
   id: string;
-  date: string; // ISO string format e.g., "2023-10-27"
-  time?: string; // 24h format "14:30"
-  duration?: number; // Estimated duration in minutes
   jobLocation?: string; // Service address, defaults to contact address
   jobLocationContactName?: string; // Name of person at site if different from contact
   jobLocationContactPhone?: string; // Phone of person at site
   createdAt?: string; // ISO string
-  status: JobStatus;
   statusHistory?: StatusHistoryEntry[];
   paymentStatus?: PaymentStatus;
   notes: string;
@@ -303,6 +302,28 @@ export interface Mileage {
   jobContactName?: string;
 }
 
+export type SavedRouteStop =
+  | { type: 'job'; jobId: string; contactId: string }
+  | { type: 'home'; label: 'Start' | 'End' }
+  | { type: 'supplier'; supplierId: string; id: string };
+
+// --- ROUTE VIEW TYPES ---
+export type JobStopData = JobTicket & { contactName: string; contactAddress: string; contactId: string; address: string; time?: string };
+export type HomeStopData = { address: string; label: 'Start' | 'End' };
+
+export type RouteStop =
+    | { type: 'job'; id: string; data: JobStopData }
+    | { type: 'home'; id: string; data: HomeStopData }
+    | { type: 'supplier'; id: string; data: Supplier };
+
+export interface RouteMetrics {
+    travelTimeText: string;
+    travelTimeValue: number; // seconds
+    travelDistanceText: string;
+    travelDistanceValue: number; // in meters
+    eta: string; // Formatted time string
+    idleTime: number; // in minutes
+}
 
 export type ViewState = 
   | { type: 'list' }

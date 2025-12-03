@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { FirebaseUser as User, auth, isFirebaseConfigured } from './firebase.ts';
 import { onAuthStateChanged } from 'firebase/auth';
 
@@ -10,8 +10,7 @@ import Settings from './components/Settings.tsx';
 import Dashboard from './components/Dashboard.tsx';
 import CalendarView from './components/CalendarView.tsx';
 import InvoiceView from './components/InvoiceView.tsx';
-// FIX: Changed to a named import to resolve a module resolution issue.
-import { JobDetailView } from './components/JobDetailView.tsx';
+import JobDetailView from './components/JobDetailView.tsx';
 import ContactSelectorModal from './components/ContactSelectorModal.tsx';
 import RouteView from './components/RouteView.tsx';
 import ExpensesView from './components/ExpensesView.tsx';
@@ -19,22 +18,48 @@ import ReportsView from './components/ReportsView.tsx';
 import MileageView from './components/MileageView.tsx';
 import Login from './components/Login.tsx';
 import LoadingOverlay from './components/LoadingOverlay.tsx';
-import { SettingsIcon } from './components/icons.tsx';
-import { DataProvider, useData } from './contexts/DataContext.tsx';
-
+import EmptyState from './components/EmptyState.tsx';
+import { SettingsIcon, UsersIcon } from './components/icons.tsx';
+import { AppProvider, useApp } from './contexts/AppContext.tsx';
+import { NavigationProvider, useNavigation } from './contexts/NavigationContext.tsx';
+import { ContactProvider, useContacts } from './contexts/ContactContext.tsx';
+import { FinanceProvider } from './contexts/FinanceContext.tsx';
+import { MileageProvider } from './contexts/MileageContext.tsx';
 import { ViewState } from './types.ts';
+
 
 // Helper to create a unique trigger for date-based actions to prevent effect loops
 const createDateTrigger = (date: string) => `${date}_${Date.now()}`;
 
 const AppContent: React.FC = () => {
     const { 
-        selectedContact, 
         viewState, 
         setViewState,
         contactSelectorDate,
         setContactSelectorDate,
-    } = useData();
+    } = useNavigation();
+    const { contacts } = useContacts();
+
+    const fullScreenViews: ViewState['type'][] = ['dashboard', 'calendar', 'route', 'expenses', 'reports', 'mileage', 'settings'];
+    const isFullScreenView = fullScreenViews.includes(viewState.type);
+
+    const selectedContactId = useMemo(() => {
+        if (viewState.type === 'detail' || viewState.type === 'edit_form') {
+            return viewState.id;
+        }
+        if (viewState.type === 'invoice' || viewState.type === 'job_detail') {
+            return viewState.contactId;
+        }
+        return null;
+    }, [viewState]);
+
+    const selectedContact = useMemo(() => {
+        if (selectedContactId) {
+            return contacts.find(c => c.id === selectedContactId) || null;
+        }
+        return null;
+    }, [contacts, selectedContactId]);
+
 
     const renderView = () => {
         switch (viewState.type) {
@@ -44,7 +69,16 @@ const AppContent: React.FC = () => {
             case 'expenses': return <ExpensesView />;
             case 'reports': return <ReportsView />;
             case 'mileage': return <MileageView />;
-            case 'list': return <ContactList selectedContactId={null} onSelectContact={(id) => setViewState({ type: 'detail', id })} onAddJob={(id) => setViewState({ type: 'detail', id, initialJobDate: createDateTrigger(new Date().toISOString().split('T')[0]) })} />;
+            case 'list': 
+                 return (
+                    <div className="hidden md:flex h-full w-full items-center justify-center bg-slate-50 dark:bg-slate-900">
+                        <EmptyState
+                            Icon={UsersIcon}
+                            title="Select a Contact"
+                            message="Choose a contact from the list to see their details."
+                        />
+                    </div>
+                );
             case 'detail':
                 if (!selectedContact) return <div className="p-4">Contact not found</div>;
                 return <ContactDetail key={selectedContact.id} contact={selectedContact} onEdit={() => setViewState({ type: 'edit_form', id: selectedContact.id })} onClose={() => setViewState({ type: 'list' })} onViewInvoice={(contactId, ticketId) => setViewState({ type: 'invoice', contactId, ticketId, from: 'contact_detail' })} onViewJobDetail={(contactId, ticketId) => setViewState({ type: 'job_detail', contactId, ticketId })} initialJobDate={viewState.initialJobDate} openJobId={viewState.openJobId} />;
@@ -58,44 +92,79 @@ const AppContent: React.FC = () => {
                 return <InvoiceView contactId={viewState.contactId} ticketId={viewState.ticketId} from={viewState.from} onClose={() => setViewState(viewState.from === 'contact_detail' ? { type: 'detail', id: viewState.contactId } : { type: 'job_detail', contactId: viewState.contactId, ticketId: viewState.ticketId })} />;
             case 'job_detail':
                 return <JobDetailView contactId={viewState.contactId} ticketId={viewState.ticketId} onBack={() => setViewState({ type: 'detail', id: viewState.contactId })} onViewInvoice={() => setViewState({ type: 'invoice', contactId: viewState.contactId, ticketId: viewState.ticketId, from: 'job_detail' })} onViewRouteForDate={(date) => setViewState({ type: 'route', initialDate: date })} />;
-            default: return null;
+            default: return <Dashboard onViewJobDetail={(contactId, ticketId) => setViewState({ type: 'job_detail', contactId, ticketId })} />;
         }
     };
+
+    const header = (
+        <Header 
+            currentView={viewState.type} 
+            onNewContact={() => setViewState({ type: 'new_form' })}
+            onGoToSettings={() => setViewState({ type: 'settings' })}
+            onGoToDashboard={() => setViewState({ type: 'dashboard' })}
+            onGoToList={() => setViewState({ type: 'list' })}
+            onGoToCalendar={() => setViewState({ type: 'calendar' })}
+            onGoToRoute={() => setViewState({ type: 'route' })}
+            onGoToExpenses={() => setViewState({ type: 'expenses' })}
+            onGoToReports={() => setViewState({ type: 'reports' })}
+            onGoToMileage={() => setViewState({ type: 'mileage' })}
+        />
+    );
+     const modal = contactSelectorDate && (
+        <ContactSelectorModal 
+            onSelect={(contactId) => { 
+                setViewState({ type: 'detail', id: contactId, initialJobDate: createDateTrigger(contactSelectorDate.toISOString().split('T')[0]) }); 
+                setContactSelectorDate(null); 
+            }} 
+            onNewContact={() => { 
+                setViewState({ type: 'new_form', initialJobDate: createDateTrigger(contactSelectorDate.toISOString().split('T')[0]) }); 
+                setContactSelectorDate(null); 
+            }} 
+            onClose={() => setContactSelectorDate(null)} 
+            selectedDate={contactSelectorDate} 
+        />
+    );
+    
+    if (isFullScreenView) {
+        return (
+            <>
+                <LoadingOverlay />
+                {header}
+                <main className="flex-grow overflow-hidden relative">{renderView()}</main>
+                {modal}
+            </>
+        );
+    }
+
+    // Split screen view for contact related pages
+    const showDetailPane = viewState.type !== 'list';
     
     return (
         <>
             <LoadingOverlay />
-            <Header 
-                currentView={viewState.type} 
-                onNewContact={() => setViewState({ type: 'new_form' })}
-                onGoToSettings={() => setViewState({ type: 'settings' })}
-                onGoToDashboard={() => setViewState({ type: 'dashboard' })}
-                onGoToList={() => setViewState({ type: 'list' })}
-                onGoToCalendar={() => setViewState({ type: 'calendar' })}
-                onGoToRoute={() => setViewState({ type: 'route' })}
-                onGoToExpenses={() => setViewState({ type: 'expenses' })}
-                onGoToReports={() => setViewState({ type: 'reports' })}
-                onGoToMileage={() => setViewState({ type: 'mileage' })}
-            />
-            <main className="flex-grow overflow-hidden relative">{renderView()}</main>
-            {contactSelectorDate && (
-                <ContactSelectorModal 
-                    onSelect={(contactId) => { 
-                        setViewState({ type: 'detail', id: contactId, initialJobDate: createDateTrigger(contactSelectorDate.toISOString().split('T')[0]) }); 
-                        setContactSelectorDate(null); 
-                    }} 
-                    onNewContact={() => { 
-                        setViewState({ type: 'new_form', initialJobDate: createDateTrigger(contactSelectorDate.toISOString().split('T')[0]) }); 
-                        setContactSelectorDate(null); 
-                    }} 
-                    onClose={() => setContactSelectorDate(null)} 
-                    selectedDate={contactSelectorDate} 
-                />
-            )}
+            {header}
+            <main className="flex-grow overflow-hidden flex flex-row">
+                 <div className={`
+                    ${showDetailPane ? 'hidden' : 'flex'} w-full
+                    md:flex md:w-[320px] lg:w-[384px] flex-shrink-0 h-full flex-col
+                `}>
+                    <ContactList
+                        selectedContactId={selectedContactId}
+                        onSelectContact={(id) => setViewState({ type: 'detail', id })}
+                        onAddJob={(contactId) => setViewState({ type: 'detail', id: contactId, initialJobDate: createDateTrigger(new Date().toISOString().split('T')[0]) })}
+                    />
+                </div>
+                <div className={`
+                    ${showDetailPane ? 'flex' : 'hidden'} w-full
+                    md:flex flex-grow h-full flex-col
+                `}>
+                    {renderView()}
+                </div>
+            </main>
+            {modal}
         </>
-    )
+    );
 }
-
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -186,9 +255,17 @@ function App() {
             z-index: 99999 !important;
         }
       `}</style>
-      <DataProvider user={user} isGuestMode={isGuestMode} onSwitchToCloud={() => setGuestModeAndReload(false)}>
-        <AppContent />
-      </DataProvider>
+      <AppProvider user={user} isGuestMode={isGuestMode} onSwitchToCloud={() => setGuestModeAndReload(false)}>
+        <NavigationProvider>
+            <ContactProvider>
+                <FinanceProvider>
+                    <MileageProvider>
+                        <AppContent />
+                    </MileageProvider>
+                </FinanceProvider>
+            </ContactProvider>
+        </NavigationProvider>
+      </AppProvider>
     </div>
   );
 }
