@@ -1,6 +1,7 @@
 
 
 
+
 export interface FileAttachment {
   id: string;
   name: string;
@@ -293,6 +294,7 @@ export interface CategorizationRule {
 
 export interface Mileage {
   id: string;
+  createdAt: string; // ISO string
   date: string; // YYYY-MM-DD
   startAddress: string;
   endAddress: string;
@@ -300,6 +302,8 @@ export interface Mileage {
   notes?: string;
   jobId?: string;
   jobContactName?: string;
+  source?: 'route-planner' | 'manual';
+  isManuallyEdited?: boolean;
 }
 
 export type SavedRouteStop =

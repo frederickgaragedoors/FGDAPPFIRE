@@ -40,6 +40,8 @@ const AppContent: React.FC = () => {
     } = useNavigation();
     const { contacts } = useContacts();
 
+    const [newContactFormKey, setNewContactFormKey] = useState(Date.now());
+
     const fullScreenViews: ViewState['type'][] = ['dashboard', 'calendar', 'route', 'expenses', 'reports', 'mileage', 'settings'];
     const isFullScreenView = fullScreenViews.includes(viewState.type);
 
@@ -82,10 +84,10 @@ const AppContent: React.FC = () => {
             case 'detail':
                 if (!selectedContact) return <div className="p-4">Contact not found</div>;
                 return <ContactDetail key={selectedContact.id} contact={selectedContact} onEdit={() => setViewState({ type: 'edit_form', id: selectedContact.id })} onClose={() => setViewState({ type: 'list' })} onViewInvoice={(contactId, ticketId) => setViewState({ type: 'invoice', contactId, ticketId, from: 'contact_detail' })} onViewJobDetail={(contactId, ticketId) => setViewState({ type: 'job_detail', contactId, ticketId })} initialJobDate={viewState.initialJobDate} openJobId={viewState.openJobId} />;
-            case 'new_form': return <ContactForm onCancel={() => setViewState({ type: 'list' })} initialJobDate={viewState.initialJobDate} />;
+            case 'new_form': return <ContactForm key={newContactFormKey} onCancel={() => setViewState({ type: 'list' })} initialJobDate={viewState.initialJobDate} />;
             case 'edit_form':
                 if (!selectedContact) return <div className="p-4">Contact not found</div>;
-                return <ContactForm initialContact={selectedContact} onCancel={() => setViewState({ type: 'detail', id: selectedContact.id })} />;
+                return <ContactForm key={selectedContact.id} initialContact={selectedContact} onCancel={() => setViewState({ type: 'detail', id: selectedContact.id })} />;
             case 'settings': 
                 return <Settings onBack={() => setViewState({ type: 'dashboard' })} />;
             case 'invoice':
@@ -99,7 +101,7 @@ const AppContent: React.FC = () => {
     const header = (
         <Header 
             currentView={viewState.type} 
-            onNewContact={() => setViewState({ type: 'new_form' })}
+            onNewContact={() => { setNewContactFormKey(Date.now()); setViewState({ type: 'new_form' }); }}
             onGoToSettings={() => setViewState({ type: 'settings' })}
             onGoToDashboard={() => setViewState({ type: 'dashboard' })}
             onGoToList={() => setViewState({ type: 'list' })}
@@ -117,6 +119,7 @@ const AppContent: React.FC = () => {
                 setContactSelectorDate(null); 
             }} 
             onNewContact={() => { 
+                setNewContactFormKey(Date.now());
                 setViewState({ type: 'new_form', initialJobDate: createDateTrigger(contactSelectorDate.toISOString().split('T')[0]) }); 
                 setContactSelectorDate(null); 
             }} 

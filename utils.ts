@@ -167,9 +167,6 @@ export const saveJsonFile = async (data: object, filename: string): Promise<void
 export const generateICSContent = (contacts: Contact[]): string => {
     let icsContent = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Business Contacts Manager//EN\nCALSCALE:GREGORIAN\n";
 
-    const formatISODate = (iso: string) => iso.replace(/[-:]/g, '').split('.')[0] + 'Z';
-    const formatDateOnly = (iso: string) => iso.substring(0, 10).replace(/-/g, '');
-
     contacts.forEach(contact => {
         if (!contact.jobTickets) return;
         
@@ -178,20 +175,34 @@ export const generateICSContent = (contacts: Contact[]): string => {
 
             ticket.statusHistory.forEach((entry: StatusHistoryEntry) => {
                 if (entry.status === 'Scheduled' || entry.status === 'Estimate Scheduled') {
-                    const startDate = new Date(entry.timestamp);
                     const isAllDay = !entry.timestamp.includes('T');
+                    // Use replace to ensure date-only strings ('YYYY-MM-DD') are parsed as local time midnight, not UTC midnight.
+                    const startDate = isAllDay ? new Date(entry.timestamp.replace(/-/g, '/')) : new Date(entry.timestamp);
                     
                     icsContent += "BEGIN:VEVENT\n";
                     icsContent += `UID:${ticket.id}-${entry.id}@businesscontactsmanager\n`;
                     icsContent += `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z\n`;
                     
+                    const formatLocalDate = (d: Date) => {
+                        const year = d.getFullYear();
+                        const month = String(d.getMonth() + 1).padStart(2, '0');
+                        const day = String(d.getDate()).padStart(2, '0');
+                        const hours = String(d.getHours()).padStart(2, '0');
+                        const minutes = String(d.getMinutes()).padStart(2, '0');
+                        const seconds = String(d.getSeconds()).padStart(2, '0');
+                        return `${year}${month}${day}T${hours}${minutes}${seconds}`;
+                    };
+
                     if (isAllDay) {
-                        icsContent += `DTSTART;VALUE=DATE:${formatDateOnly(entry.timestamp)}\n`;
+                        const year = startDate.getFullYear();
+                        const month = String(startDate.getMonth() + 1).padStart(2, '0');
+                        const day = String(startDate.getDate()).padStart(2, '0');
+                        icsContent += `DTSTART;VALUE=DATE:${year}${month}${day}\n`;
                     } else {
-                        icsContent += `DTSTART:${formatISODate(entry.timestamp).slice(0, -1)}\n`;
-                        const durationMinutes = entry.duration || 60; // Default to 1 hour
+                        icsContent += `DTSTART:${formatLocalDate(startDate)}\n`;
+                        const durationMinutes = entry.duration || 60;
                         const endDate = new Date(startDate.getTime() + durationMinutes * 60000);
-                        icsContent += `DTEND:${formatISODate(endDate.toISOString()).slice(0, -1)}\n`;
+                        icsContent += `DTEND:${formatLocalDate(endDate)}\n`;
                     }
 
                     const summary = `${contact.name} - ${entry.status}`;
@@ -220,7 +231,7 @@ export const generateICSContent = (contacts: Contact[]): string => {
 };
 
 export const downloadICSFile = (content: string): void => {
-  const blob = new Blob([content], { type: 'text/calendar;charset=utf-8' });
+  const blob = new Blob([content], { type: 'text/calendar;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
