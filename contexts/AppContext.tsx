@@ -23,6 +23,8 @@ export interface AppContextType {
     showContactPhotos: boolean;
     routes: Record<string, SavedRouteStop[]>;
     categorizationRules: CategorizationRule[];
+    // FIX: Expose the raw settings object for components that need properties not explicitly destructured.
+    settings: any;
 
     // Actions
     onSwitchToCloud: () => void;
@@ -156,7 +158,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ user, isGuestMode, onS
     }, [settings.enabledStatuses]);
     const showContactPhotos = useMemo(() => settings.showContactPhotos !== false, [settings.showContactPhotos]);
     const mapSettings = useMemo(() => ({
-        apiKey: settings.mapSettings?.apiKey || (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || '',
+        // FIX: Explicitly cast env var to a string to satisfy the type requirement. Use String() for safe conversion from unknown.
+        apiKey: settings.mapSettings?.apiKey || String((import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || ''),
         homeAddress: settings.mapSettings?.homeAddress || ''
     }), [settings.mapSettings]);
     const routes = useMemo(() => settings.routes || {}, [settings.routes]);
@@ -165,6 +168,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ user, isGuestMode, onS
         user, isGuestMode, onSwitchToCloud,
         defaultFields, businessInfo, emailSettings, jobTemplates, partsCatalog, enabledStatuses, mapSettings, showContactPhotos, routes, categorizationRules,
         theme, isGlobalLoading, globalLoadingMessage,
+        settings,
         saveSettings, handleSaveCategorizationRules, setTheme, setIsGlobalLoading, setGlobalLoadingMessage, handleSaveRoute, handleClearRouteForDate
     };
 
