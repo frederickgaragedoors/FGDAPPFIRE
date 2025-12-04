@@ -4,6 +4,8 @@ import { fileURLToPath } from 'url';
 import http from 'http';
 import nodeNet from 'net';
 import process from 'process';
+// FIX: Import Buffer to resolve 'Cannot find name' error.
+import { Buffer } from 'buffer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -45,66 +47,81 @@ function findFreePort(startPort) {
   });
 }
 
+// FIX: Changed JSDoc to use @returns for better type inference.
 /**
+ * Creates a local HTTP server to serve the dist folder.
+ * A promise that resolves with the port number the server is listening on.
  * @returns {Promise<{port: number}>}
  */
-const createLocalServer = () => {
-  return new Promise((resolve, reject) => {
-    // This path works both in dev and when packed inside an asar archive.
-    const distPath = path.join(__dirname, '../dist');
+const createLocalServer = async () => {
+  const distPath = path.join(__dirname, '../dist');
 
-    const server = http.createServer(async (req, res) => {
-      // Map the request URL to a file path.
-      const urlPath = req.url === '/' ? 'index.html' : req.url;
-      const requestedPath = path.join(distPath, urlPath);
-      const normalizedPath = path.normalize(requestedPath);
-      
-      try {
-        // Security: Block any attempts to access files outside the dist folder.
-        if (!normalizedPath.startsWith(distPath)) {
-            res.writeHead(403);
-            res.end('Forbidden');
-            return;
-        }
-
-        // Use Electron's net.fetch, which can read files from inside an asar archive.
-        let response = await net.fetch(`file://${normalizedPath}`);
-
-        // If the file is not found, serve index.html for Single Page Application (SPA) routing.
-        if (!response.ok) {
-            response = await net.fetch(`file://${path.join(distPath, 'index.html')}`);
-        }
-        
-        const buffer = await response.arrayBuffer();
-        
-        // Determine MIME type based on file extension.
-        let contentType = 'text/html';
-        const ext = path.extname(normalizedPath);
-        if (ext === '.js') contentType = 'text/javascript';
-        if (ext === '.css') contentType = 'text/css';
-        if (ext === '.svg') contentType = 'image/svg+xml';
-
-        res.writeHead(response.status, { 'Content-Type': contentType });
-        res.end(Buffer.from(buffer));
-        
-      } catch (e) {
-        console.error("Local server error fetching resource: ", e);
-        res.writeHead(500);
-        res.end("Server error");
+  const server = http.createServer(async (req, res) => {
+    // Map the request URL to a file path.
+    const urlPath = req.url === '/' ? '/index.html' : req.url;
+    const requestedPath = path.join(distPath, urlPath);
+    const normalizedPath = path.normalize(requestedPath);
+    
+    try {
+      // Security: Block any attempts to access files outside the dist folder.
+      if (!normalizedPath.startsWith(distPath)) {
+          res.writeHead(403);
+          res.end('Forbidden');
+          return;
       }
-    });
 
-    server.on('error', (e) => reject(e));
+      // Use Electron's net.fetch, which can read files from inside an asar archive.
+      let response = await net.fetch(`file://${normalizedPath}`);
 
-    // Find a free port starting from 3001
-    findFreePort(3001).then(port => {
-      // FIX: Explicitly cast port to a number to satisfy the listen method's signature.
-      server.listen(Number(port), '127.0.0.1', () => {
-        console.log(`Local server running at http://localhost:${port}`);
-        resolve({ port: Number(port) });
-      });
-    }).catch(reject);
+      // If the file is not found, serve index.html for Single Page Application (SPA) routing.
+      if (!response.ok) {
+          response = await net.fetch(`file://${path.join(distPath, 'index.html')}`);
+      }
+      
+      const buffer = await response.arrayBuffer();
+      
+      // Determine MIME type based on file extension.
+      let contentType = 'application/octet-stream';
+      const ext = path.extname(urlPath || '').toLowerCase();
+
+      switch(ext) {
+        case '.js': contentType = 'text/javascript'; break;
+        case '.css': contentType = 'text/css'; break;
+        case '.json': contentType = 'application/json'; break;
+        case '.png': contentType = 'image/png'; break;
+        case '.jpg': case '.jpeg': contentType = 'image/jpeg'; break;
+        case '.gif': contentType = 'image/gif'; break;
+        case '.svg': contentType = 'image/svg+xml'; break;
+        case '.woff': contentType = 'font/woff'; break;
+        case '.woff2': contentType = 'font/woff2'; break;
+        case '.ttf': contentType = 'font/ttf'; break;
+        case '.eot': contentType = 'application/vnd.ms-fontobject'; break;
+        case '.otf': contentType = 'font/otf'; break;
+        case '.html': contentType = 'text/html'; break;
+        case '': contentType = 'text/html'; break; // For SPA routes
+      }
+
+      res.writeHead(response.status, { 'Content-Type': contentType });
+      res.end(Buffer.from(buffer));
+      
+    } catch (e) {
+      console.error("Local server error fetching resource: ", e);
+      res.writeHead(500);
+      res.end("Server error");
+    }
   });
+
+  const port = await findFreePort(3001);
+
+  await new Promise((resolve, reject) => {
+    server.on('error', (e) => reject(e));
+    server.listen(Number(port), '127.0.0.1', () => {
+      console.log(`Local server running at http://localhost:${port}`);
+      resolve(undefined);
+    });
+  });
+
+  return { port: Number(port) };
 };
 
 
@@ -116,7 +133,7 @@ const createWindow = async () => {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: false,
+      sandbox: true,
       preload: path.join(__dirname, 'preload.mjs')
     }
   });
