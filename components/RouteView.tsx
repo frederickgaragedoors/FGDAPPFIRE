@@ -126,14 +126,25 @@ const getTomorrowDateString = () => {
 };
 
 const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack, onViewJobDetail, initialDate }) => {
-    // FIX: Get mapSettings, businessInfo, and route handlers from useApp context
-    const { mapSettings, businessInfo, handleSaveRoute, handleClearRouteForDate } = useApp();
+    const { mapSettings, businessInfo, handleSaveRoute, handleClearRouteForDate, routes } = useApp();
     const [selectedDate, setSelectedDate] = useState(initialDate || getLocalDateString(new Date()));
     const [isAddStopModalOpen, setIsAddStopModalOpen] = useState(false);
     const [addStopIndex, setAddStopIndex] = useState<number | null>(null);
     
     const routeStops = useRoutePlanner(selectedDate);
     const { routeMetrics, totalMetrics, leaveByTime } = useRouteMetrics(routeStops, selectedDate);
+    
+    useEffect(() => {
+        // Automatically create a snapshot if one doesn't exist for the current view
+        if (!routes[selectedDate] && routeStops.length > 1) {
+             const simplifiedRoute: SavedRouteStop[] = routeStops.map((stop): SavedRouteStop => {
+                if (stop.type === 'home') return { type: 'home', label: stop.data.label };
+                if (stop.type === 'job') return { type: 'job', jobId: stop.data.id.split('-')[0], contactId: stop.data.contactId };
+                return { type: 'supplier', supplierId: stop.data.id, id: stop.id };
+            });
+            handleSaveRoute(selectedDate, simplifiedRoute);
+        }
+    }, [routeStops, selectedDate, routes, handleSaveRoute]);
 
     const handleDeleteStop = (id: string) => {
         const stopIndex = routeStops.findIndex(stop => stop.id === id);

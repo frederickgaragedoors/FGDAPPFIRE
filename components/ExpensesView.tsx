@@ -503,6 +503,7 @@ const ExpensesView: React.FC = () => {
             </div>
             {(editingExpense) && 
                 <ExpenseFormModal 
+                    key={editingExpense.id}
                     expense={editingExpense} 
                     onClose={() => { setEditingExpense(null); handleCancelReview(); }} 
                     onSave={(exp, runRecon) => {

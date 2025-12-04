@@ -4,6 +4,7 @@ import { XIcon, FileIcon, TrashIcon, PlusIcon, LinkIcon } from './icons.tsx';
 import { generateId } from '../utils.ts';
 import { useFinance } from '../contexts/FinanceContext.tsx';
 import TransactionLinkerModal from './TransactionLinkerModal.tsx';
+import ConfirmationModal from './ConfirmationModal.tsx';
 
 interface ExpenseFormModalProps {
   expense: Expense;
@@ -23,6 +24,7 @@ const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({ expense, onSave, on
   const [lineItems, setLineItems] = useState<ExpenseLineItem[]>([]);
   const [isDeferred, setIsDeferred] = useState(false);
   const [isLinkerOpen, setIsLinkerOpen] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (expense) {
@@ -30,7 +32,7 @@ const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({ expense, onSave, on
       setDate(expense.date);
       setTotal(expense.total);
       setTax(expense.tax);
-      setLineItems([...expense.lineItems]);
+      setLineItems(expense.lineItems.map(item => ({...item}))); // Create copy
       setIsDeferred(expense.isDeferred || false);
     }
   }, [expense]);
@@ -59,10 +61,8 @@ const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({ expense, onSave, on
     });
   };
   
-  const handleDelete = () => {
-    if (window.confirm("Are you sure you want to delete this expense?")) {
-        onDelete(expense.id);
-    }
+  const performDelete = () => {
+    onDelete(expense.id);
   };
 
   const handleLink = (txnIds: string[]) => {
@@ -206,7 +206,7 @@ const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({ expense, onSave, on
 
             <div className="bg-slate-50 dark:bg-slate-900 px-6 py-4 flex justify-between items-center rounded-b-lg border-t dark:border-slate-700 flex-shrink-0">
                 <button 
-                    onClick={handleDelete} 
+                    onClick={() => setIsDeleteConfirmOpen(true)} 
                     className="px-4 py-2 rounded-md text-sm font-medium text-red-600 bg-red-100 dark:bg-red-900/50 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900 transition-colors"
                 >
                     Delete
@@ -234,6 +234,15 @@ const ExpenseFormModal: React.FC<ExpenseFormModalProps> = ({ expense, onSave, on
                 unreconciledDebits={unreconciledDebits}
                 onLink={handleLink}
                 onClose={() => setIsLinkerOpen(false)}
+            />
+        )}
+        {isDeleteConfirmOpen && (
+            <ConfirmationModal
+                isOpen={isDeleteConfirmOpen}
+                onClose={() => setIsDeleteConfirmOpen(false)}
+                onConfirm={performDelete}
+                title="Delete Expense"
+                message="Are you sure you want to delete this expense?"
             />
         )}
     </>

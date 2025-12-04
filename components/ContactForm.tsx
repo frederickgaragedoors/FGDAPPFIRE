@@ -22,57 +22,61 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onCancel, ini
   const { addNotification } = useNotifications();
   const apiKey = mapSettings?.apiKey;
 
-  const [name, setName] = useState(initialContact?.name || '');
-  const [email, setEmail] = useState(initialContact?.email || '');
-  const [phone, setPhone] = useState(initialContact?.phone || '');
-  const [address, setAddress] = useState(initialContact?.address || '');
-  const [photoUrl, setPhotoUrl] = useState(initialContact?.photoUrl || '');
-  const [files, setFiles] = useState<FileAttachment[]>(initialContact?.files || []);
-  const [customFields, setCustomFields] = useState<CustomField[]>(
-    initialContact?.customFields || defaultFields?.map(df => ({ id: generateId(), label: df.label, value: '' })) || []
-  );
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [files, setFiles] = useState<FileAttachment[]>([]);
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [doorProfiles, setDoorProfiles] = useState<DoorProfile[]>([]);
+  const [stagedFiles, setStagedFiles] = useState<FileAttachment[]>([]);
   
   const addressInputRef = useRef<HTMLInputElement>(null);
   const { isLoaded: isMapsLoaded, error: mapsError } = useGoogleMaps(apiKey);
-
-  const [doorProfiles, setDoorProfiles] = useState<DoorProfile[]>(() => {
-      if (initialContact?.doorProfiles) {
-          return initialContact.doorProfiles.map(p => ({
-              ...p,
-              doorInstallDate: p.doorInstallDate || (p as any).installDate || 'Unknown',
-              springInstallDate: p.springInstallDate || (p as any).installDate || 'Unknown',
-              openerInstallDate: p.openerInstallDate || (p as any).installDate || 'Unknown',
-              springs: p.springs || (p.springSize ? [{ id: generateId(), size: p.springSize }] : [{ id: generateId(), size: '' }])
-          }));
-      }
-      if ((initialContact as any)?.doorProfile) {
-          const oldP = (initialContact as any).doorProfile;
-          return [{ 
-              ...oldP, 
-              id: generateId(),
-              doorInstallDate: oldP.installDate || 'Unknown',
-              springInstallDate: oldP.installDate || 'Unknown',
-              openerInstallDate: oldP.installDate || 'Unknown',
-              springs: [{ id: generateId(), size: oldP.springSize || '' }]
-            }];
-      }
-      return [{
-        id: generateId(),
-        dimensions: '',
-        doorType: '',
-        springSystem: '',
-        springSize: '',
-        springs: [{ id: generateId(), size: '' }],
-        openerBrand: '',
-        openerModel: '',
-        doorInstallDate: 'Unknown',
-        springInstallDate: 'Unknown',
-        openerInstallDate: 'Unknown'
-      }];
-  });
-
-  const [stagedFiles, setStagedFiles] = useState<FileAttachment[]>([]);
   const newFileObjects = useRef<{ [id: string]: File }>({});
+
+  // This effect synchronizes the form's internal state with the `initialContact` prop.
+  // This makes the component more robust by ensuring it correctly displays the data
+  // of a new contact if the prop changes, fixing a potential bug where old data could persist.
+  useEffect(() => {
+    setName(initialContact?.name || '');
+    setEmail(initialContact?.email || '');
+    setPhone(initialContact?.phone || '');
+    setAddress(initialContact?.address || '');
+    setPhotoUrl(initialContact?.photoUrl || '');
+    setFiles(initialContact?.files || []);
+    setCustomFields(initialContact?.customFields || defaultFields?.map(df => ({ id: generateId(), label: df.label, value: '' })) || []);
+    setStagedFiles([]);
+    newFileObjects.current = {};
+
+    if (initialContact?.doorProfiles) {
+        setDoorProfiles(initialContact.doorProfiles.map(p => ({
+            ...p,
+            doorInstallDate: p.doorInstallDate || (p as any).installDate || 'Unknown',
+            springInstallDate: p.springInstallDate || (p as any).installDate || 'Unknown',
+            openerInstallDate: p.openerInstallDate || (p as any).installDate || 'Unknown',
+            springs: p.springs || (p.springSize ? [{ id: generateId(), size: p.springSize }] : [{ id: generateId(), size: '' }])
+        })));
+    } else if ((initialContact as any)?.doorProfile) {
+        const oldP = (initialContact as any).doorProfile;
+        setDoorProfiles([{ 
+            ...oldP, 
+            id: generateId(),
+            doorInstallDate: oldP.installDate || 'Unknown',
+            springInstallDate: oldP.installDate || 'Unknown',
+            openerInstallDate: oldP.installDate || 'Unknown',
+            springs: [{ id: generateId(), size: oldP.springSize || '' }]
+        }]);
+    } else {
+        setDoorProfiles([{
+            id: generateId(), dimensions: '', doorType: '', springSystem: '', springSize: '',
+            springs: [{ id: generateId(), size: '' }], openerBrand: '', openerModel: '',
+            doorInstallDate: 'Unknown', springInstallDate: 'Unknown', openerInstallDate: 'Unknown'
+        }]);
+    }
+  }, [initialContact, defaultFields]);
+
 
   // Initialize Google Maps Autocomplete
   useEffect(() => {

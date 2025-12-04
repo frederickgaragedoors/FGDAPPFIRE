@@ -80,6 +80,7 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
     const [isContactDeleteConfirmOpen, setIsContactDeleteConfirmOpen] = useState(false);
     const [jobTicketToDeleteId, setJobTicketToDeleteId] = useState<string | null>(null);
     const [jobMenuOpen, setJobMenuOpen] = useState<string | null>(null);
+    const [jobModalKey, setJobModalKey] = useState(Date.now());
 
     const processedParamsRef = useRef<{ date?: string; id?: string }>({});
 
@@ -325,26 +326,40 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
                         </div>
                     )}
                     <div>
-                        <div className="flex items-center space-x-4 mb-4">
-                            {/* FIX: Specified props for React.ReactElement to allow passing className. */}
-                            {[
-                                ['tel:', contact.phone, <PhoneIcon/>, 'Call'], 
-                                ['sms:', contact.phone, <MessageIcon/>, 'Text'], 
-                                ['mailto:', contact.email, <MailIcon/>, 'Email'], 
-                                [`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(contact.address)}`, contact.address, <MapPinIcon/>, 'Map']
-                            ].map(([prefix, value, icon, label]: [string, string, React.ReactElement<{ className?: string }>, string]) => (
-                                value && (
-                                    <a key={label} href={prefix.startsWith('https') ? value as string : `${prefix}${value}`} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center space-y-1 text-slate-600 dark:text-slate-300 hover:text-sky-600 dark:hover:text-sky-400 transition-colors group">
-                                        <div className="p-3 rounded-full bg-slate-100 dark:bg-slate-800 group-hover:bg-sky-100 dark:group-hover:bg-sky-900/50 transition-colors">{React.cloneElement(icon, { className: "w-5 h-5" })}</div>
-                                        <span className="text-xs font-medium">{label}</span>
-                                    </a>
-                                )
-                            ))}
-                        </div>
-                        <div className="text-sm text-slate-600 dark:text-slate-400 space-y-1">
-                            <p><strong className="font-semibold text-slate-800 dark:text-slate-200">Email:</strong> {contact.email || 'N/A'}</p>
-                            <p><strong className="font-semibold text-slate-800 dark:text-slate-200">Phone:</strong> {formatPhoneNumber(contact.phone) || 'N/A'}</p>
-                            <p><strong className="font-semibold text-slate-800 dark:text-slate-200">Address:</strong> {contact.address || 'N/A'}</p>
+                        <div className="text-sm text-slate-600 dark:text-slate-400 space-y-2">
+                             <p>
+                                <strong className="font-semibold text-slate-800 dark:text-slate-200">Email:</strong>{' '}
+                                {contact.email ? (
+                                <a href={`mailto:${contact.email}`} className="text-sky-600 dark:text-sky-400 hover:underline">
+                                    {contact.email}
+                                </a>
+                                ) : 'N/A'}
+                            </p>
+                            <div className="flex items-center gap-4 flex-wrap">
+                                <p className="flex-shrink-0">
+                                    <strong className="font-semibold text-slate-800 dark:text-slate-200">Phone:</strong> {formatPhoneNumber(contact.phone) || 'N/A'}
+                                </p>
+                                {contact.phone && (
+                                    <div className="flex items-center space-x-2">
+                                        <a href={`tel:${contact.phone}`} className="flex items-center space-x-1 px-3 py-1 rounded-full text-sm font-medium text-sky-700 dark:text-sky-300 bg-sky-100 dark:bg-sky-900/50 hover:bg-sky-200 dark:hover:bg-sky-800 transition-colors">
+                                            <PhoneIcon className="w-4 h-4" />
+                                            <span>Call</span>
+                                        </a>
+                                        <a href={`sms:${contact.phone}`} className="flex items-center space-x-1 px-3 py-1 rounded-full text-sm font-medium text-teal-700 dark:text-teal-300 bg-teal-100 dark:bg-teal-900/50 hover:bg-teal-200 dark:hover:bg-teal-800 transition-colors">
+                                            <MessageIcon className="w-4 h-4" />
+                                            <span>Text</span>
+                                        </a>
+                                    </div>
+                                )}
+                            </div>
+                            <p>
+                                <strong className="font-semibold text-slate-800 dark:text-slate-200">Address:</strong>{' '}
+                                {contact.address ? (
+                                <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(contact.address)}`} target="_blank" rel="noopener noreferrer" className="text-sky-600 dark:text-sky-400 hover:underline">
+                                    {contact.address}
+                                </a>
+                                ) : 'N/A'}
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -384,7 +399,7 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
                     <div className="space-y-4">
                         <div className="flex justify-between items-center">
                             <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Job Tickets ({sortedJobTickets.length})</h3>
-                            <button onClick={() => { setEditingJobTicket(null); setIsJobTicketModalOpen(true); }} className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium text-white bg-sky-500 hover:bg-sky-600">
+                            <button onClick={() => { setEditingJobTicket(null); setJobModalKey(Date.now()); setIsJobTicketModalOpen(true); }} className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium text-white bg-sky-500 hover:bg-sky-600">
                                 <PlusIcon className="w-4 h-4" />
                                 <span>Add Job</span>
                             </button>
@@ -401,10 +416,22 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
                                     const statusColor = jobStatusColors[currentStatus];
                                     const paymentColor = paymentStatusColors[ticket.paymentStatus || 'unpaid'];
                                     const paymentLabel = paymentStatusLabels[ticket.paymentStatus || 'unpaid'];
-                                    const ticketTime = latestStatusEntry && latestStatusEntry.timestamp.includes('T') ? latestStatusEntry.timestamp.split('T')[1].substring(0,5) : undefined;
+                                    
+                                    let ticketTime: string | undefined;
+                                    if (latestStatusEntry && latestStatusEntry.timestamp.includes('T')) {
+                                        const localDate = new Date(latestStatusEntry.timestamp);
+                                        ticketTime = `${localDate.getHours().toString().padStart(2, '0')}:${localDate.getMinutes().toString().padStart(2, '0')}`;
+                                    }
                                     
                                     return (
-                                        <li key={ticket.id} className="p-4 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
+                                        <li 
+                                            key={ticket.id} 
+                                            onClick={() => onViewJobDetail(contact.id, ticket.id)}
+                                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onViewJobDetail(contact.id, ticket.id); }}}
+                                            role="button"
+                                            tabIndex={0}
+                                            className="p-4 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 cursor-pointer hover:shadow-md hover:border-sky-500 dark:hover:border-sky-500 transition-all outline-none focus:ring-2 focus:ring-sky-500"
+                                        >
                                             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
                                                 <div className="flex-grow">
                                                     <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -422,12 +449,11 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
                                                     <span className="font-bold text-slate-800 dark:text-slate-100">${totalCost.toFixed(2)}</span>
                                                 </div>
                                                 <div className="relative" ref={jobMenuOpen === ticket.id ? jobMenuRef : null}>
-                                                     <button onClick={() => setJobMenuOpen(jobMenuOpen === ticket.id ? null : ticket.id)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700">
+                                                     <button onClick={(e) => { e.stopPropagation(); setJobMenuOpen(jobMenuOpen === ticket.id ? null : ticket.id); }} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700">
                                                         <EllipsisVerticalIcon className="w-5 h-5 text-slate-500 dark:text-slate-400" />
                                                     </button>
                                                     {jobMenuOpen === ticket.id && (
-                                                        <div className="absolute right-0 mt-1 w-48 bg-white dark:bg-slate-700 rounded-md shadow-lg border dark:border-slate-600 z-10">
-                                                            <button onClick={() => { onViewJobDetail(contact.id, ticket.id); setJobMenuOpen(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600"><ClipboardListIcon className="w-4 h-4"/>View Details</button>
+                                                        <div className="absolute right-0 mt-1 w-48 bg-white dark:bg-slate-700 rounded-md shadow-lg border dark:border-slate-600 z-10" onClick={e => e.stopPropagation()}>
                                                             <button onClick={() => { setEditingJobTicket(ticket); setIsJobTicketModalOpen(true); setJobMenuOpen(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600"><PencilSquareIcon className="w-4 h-4"/>Edit Job</button>
                                                             <button onClick={() => { onViewInvoice(contact.id, ticket.id); setJobMenuOpen(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600"><PrinterIcon className="w-4 h-4"/>Invoice/Estimate</button>
                                                             <div className="border-t dark:border-slate-600 my-1"></div>
@@ -529,6 +555,7 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
             )}
             {isJobTicketModalOpen && (
                 <JobTicketModal
+                    key={editingJobTicket?.id || `new-${jobModalKey}`}
                     entry={editingJobTicket}
                     onSave={handleSaveJobTicket}
                     onClose={() => {

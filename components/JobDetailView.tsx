@@ -144,7 +144,9 @@ const JobDetailView: React.FC<JobDetailViewProps> = ({
   };
 
   const jobDate = sortedStatusHistory[0] ? new Date(sortedStatusHistory[0].timestamp) : new Date();
-  const ticketTime = sortedStatusHistory[0] && sortedStatusHistory[0].timestamp.includes('T') ? sortedStatusHistory[0].timestamp.split('T')[1].substring(0, 5) : undefined;
+  const ticketTime = sortedStatusHistory[0] && sortedStatusHistory[0].timestamp.includes('T') 
+    ? `${jobDate.getHours().toString().padStart(2, '0')}:${jobDate.getMinutes().toString().padStart(2, '0')}`
+    : undefined;
 
   return (
     <>
@@ -154,7 +156,6 @@ const JobDetailView: React.FC<JobDetailViewProps> = ({
               <button onClick={onBack} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 mr-2"><ArrowLeftIcon className="w-6 h-6" /></button>
               <div>
                   <h1 className="text-2xl font-bold">Job #{ticket.id}</h1>
-                  <p onClick={onBack} className="text-slate-500 cursor-pointer hover:underline">for {contact.name}</p>
               </div>
           </div>
           
@@ -166,10 +167,13 @@ const JobDetailView: React.FC<JobDetailViewProps> = ({
                       <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
                            <div className="flex justify-between items-start">
                                 <div>
-                                    <p className="text-sm text-slate-500 dark:text-slate-400">Scheduled for</p>
-                                    {/* FIX: This commit resolves multiple TypeScript errors by refactoring the component to be fully compatible with the `statusHistory`-based data model. It removes all references to deprecated properties like `date`, `time`, and `status` on the `JobTicket` object. Job date and time are now correctly derived from the latest status entry, and the status-to-icon mapping has been updated to include 'Job Created', preventing crashes and ensuring data consistency. */}
+                                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                                      Scheduled for{' '}
+                                      <span onClick={onBack} className="font-semibold text-slate-600 dark:text-slate-300 cursor-pointer hover:underline">
+                                        {contact.name}
+                                      </span>
+                                    </p>
                                     <p className="text-lg font-semibold text-slate-800 dark:text-slate-100">{jobDate.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
-                                    {/* FIX: This commit resolves multiple TypeScript errors by refactoring the component to be fully compatible with the `statusHistory`-based data model. It removes all references to deprecated properties like `date`, `time`, and `status` on the `JobTicket` object. Job date and time are now correctly derived from the latest status entry, and the status-to-icon mapping has been updated to include 'Job Created', preventing crashes and ensuring data consistency. */}
                                     {ticketTime && <p className="text-lg font-bold text-sky-600 dark:text-sky-400">{formatTime(ticketTime)}</p>}
                                 </div>
                                 <div className="flex space-x-2">
@@ -182,6 +186,27 @@ const JobDetailView: React.FC<JobDetailViewProps> = ({
                                 <p className="font-medium text-slate-700 dark:text-slate-200">{ticket.jobLocation || contact.address}</p>
                                 {ticket.jobLocationContactName && <p className="text-sm text-slate-500 dark:text-slate-400">Attn: {ticket.jobLocationContactName}</p>}
                            </div>
+                           <div className="mt-4 border-t border-slate-200 dark:border-slate-700 pt-4">
+                                <h3 className="text-xs font-semibold uppercase text-slate-400 dark:text-slate-500 mb-3">Quick Actions</h3>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                    <a href={`tel:${contact.phone}`} className="flex flex-col items-center p-3 bg-sky-100 dark:bg-sky-900/50 rounded-md hover:bg-sky-200 dark:hover:bg-sky-800/60 transition-colors">
+                                        <PhoneIcon className="w-6 h-6 text-sky-600 dark:text-sky-400"/>
+                                        <span className="text-xs mt-1 font-medium text-sky-800 dark:text-sky-300">Call</span>
+                                    </a>
+                                    <button onClick={handleOnMyWay} className="flex flex-col items-center p-3 bg-teal-100 dark:bg-teal-900/50 rounded-md hover:bg-teal-200 dark:hover:bg-teal-800/60 transition-colors">
+                                        <MessageIcon className="w-6 h-6 text-teal-600 dark:text-teal-400"/>
+                                        <span className="text-xs mt-1 font-medium text-teal-800 dark:text-teal-300">On My Way</span>
+                                    </button>
+                                    <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(ticket.jobLocation || contact.address)}`} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center p-3 bg-amber-100 dark:bg-amber-900/50 rounded-md hover:bg-amber-200 dark:hover:bg-amber-800/60 transition-colors">
+                                        <MapIcon className="w-6 h-6 text-amber-600 dark:text-amber-400"/>
+                                        <span className="text-xs mt-1 font-medium text-amber-800 dark:text-amber-300">Navigate</span>
+                                    </a>
+                                    <button onClick={() => onViewRouteForDate(jobDate.toISOString().split('T')[0])} className="flex flex-col items-center p-3 bg-purple-100 dark:bg-purple-900/50 rounded-md hover:bg-purple-200 dark:hover:bg-purple-800/60 transition-colors">
+                                        <CarIcon className="w-6 h-6 text-purple-600 dark:text-purple-400"/>
+                                        <span className="text-xs mt-1 font-medium text-purple-800 dark:text-purple-300">View Route</span>
+                                    </button>
+                                </div>
+                            </div>
                             <div className="mt-4 border-t border-slate-200 dark:border-slate-700 pt-4">
                                 <h3 className="text-xs font-semibold uppercase text-slate-400 dark:text-slate-500 mb-2">Job Notes</h3>
                                 <p className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{ticket.notes || 'No notes for this job.'}</p>
@@ -213,7 +238,22 @@ const JobDetailView: React.FC<JobDetailViewProps> = ({
                                 })}
                             </ol>
                       </div>
+                  </div>
 
+                  {/* Right Column: Financial & Inspections */}
+                  <div className="space-y-6">
+                      <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
+                          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">Financial Summary</h2>
+                           <div className="space-y-2">
+                                <div className="flex justify-between text-sm"><span className="text-slate-500 dark:text-slate-400">Total</span><span className="font-semibold">${totalCost.toFixed(2)}</span></div>
+                                <div className="flex justify-between text-sm"><span className="text-slate-500 dark:text-slate-400">Deposit Paid</span><span className="font-semibold">${(ticket.deposit || 0).toFixed(2)}</span></div>
+                                <div className="flex justify-between text-lg pt-2 border-t border-slate-200 dark:border-slate-700"><span className="font-bold text-slate-800 dark:text-slate-100">Balance Due</span><span className="font-bold">${balanceDue.toFixed(2)}</span></div>
+                           </div>
+                           <div className="mt-4 flex flex-col gap-2">
+                                <span className={`w-full text-center px-2 py-1 text-sm font-medium rounded-full ${paymentColor.base} ${paymentColor.text}`}>{paymentLabel}</span>
+                                <button onClick={onViewInvoice} className="w-full mt-2 text-center px-4 py-2 bg-sky-500 text-white rounded-md hover:bg-sky-600 font-medium text-sm transition-colors">View Invoice / Estimate</button>
+                           </div>
+                      </div>
                       <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
                           <div className="flex justify-between items-center mb-4">
                             <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Safety Inspections</h2>
@@ -246,33 +286,6 @@ const JobDetailView: React.FC<JobDetailViewProps> = ({
                           ) : (
                             <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No inspections have been performed for this job.</p>
                           )}
-                      </div>
-
-                  </div>
-
-                  {/* Right Column: Financial & Quick Actions */}
-                  <div className="space-y-6">
-                      <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
-                          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">Financial Summary</h2>
-                           <div className="space-y-2">
-                                <div className="flex justify-between text-sm"><span className="text-slate-500 dark:text-slate-400">Total</span><span className="font-semibold">${totalCost.toFixed(2)}</span></div>
-                                <div className="flex justify-between text-sm"><span className="text-slate-500 dark:text-slate-400">Deposit Paid</span><span className="font-semibold">${(ticket.deposit || 0).toFixed(2)}</span></div>
-                                <div className="flex justify-between text-lg pt-2 border-t border-slate-200 dark:border-slate-700"><span className="font-bold text-slate-800 dark:text-slate-100">Balance Due</span><span className="font-bold">${balanceDue.toFixed(2)}</span></div>
-                           </div>
-                           <div className="mt-4 flex flex-col gap-2">
-                                <span className={`w-full text-center px-2 py-1 text-sm font-medium rounded-full ${paymentColor.base} ${paymentColor.text}`}>{paymentLabel}</span>
-                                <button onClick={onViewInvoice} className="w-full mt-2 text-center px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 font-medium text-sm">View Invoice / Estimate</button>
-                           </div>
-                      </div>
-                      <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
-                          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">Quick Actions</h2>
-                          <div className="grid grid-cols-2 gap-3">
-                            <a href={`tel:${contact.phone}`} className="flex flex-col items-center p-3 bg-slate-100 dark:bg-slate-700 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600"><PhoneIcon className="w-6 h-6 text-slate-600 dark:text-slate-300"/><span className="text-xs mt-1">Call</span></a>
-                            <button onClick={handleOnMyWay} className="flex flex-col items-center p-3 bg-slate-100 dark:bg-slate-700 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600"><MessageIcon className="w-6 h-6 text-slate-600 dark:text-slate-300"/><span className="text-xs mt-1">On My Way</span></button>
-                            <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(ticket.jobLocation || contact.address)}`} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center p-3 bg-slate-100 dark:bg-slate-700 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600"><MapIcon className="w-6 h-6 text-slate-600 dark:text-slate-300"/><span className="text-xs mt-1">Navigate</span></a>
-                            {/* FIX: This commit resolves multiple TypeScript errors by refactoring the component to be fully compatible with the `statusHistory`-based data model. It removes all references to deprecated properties like `date`, `time`, and `status` on the `JobTicket` object. Job date and time are now correctly derived from the latest status entry, and the status-to-icon mapping has been updated to include 'Job Created', preventing crashes and ensuring data consistency. */}
-                            <button onClick={() => onViewRouteForDate(jobDate.toISOString().split('T')[0])} className="flex flex-col items-center p-3 bg-slate-100 dark:bg-slate-700 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600"><CarIcon className="w-6 h-6 text-slate-600 dark:text-slate-300"/><span className="text-xs mt-1">View Route</span></button>
-                          </div>
                       </div>
                   </div>
               </div>

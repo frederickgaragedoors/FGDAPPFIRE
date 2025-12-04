@@ -767,6 +767,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
             </div>
             {isTemplateModalOpen && (
                 <JobTemplateModal
+                    key={editingTemplate?.id || 'new'}
                     template={editingTemplate}
                     onSave={handleSaveTemplate}
                     onClose={() => { setIsTemplateModalOpen(false); setEditingTemplate(null); }}

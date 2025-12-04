@@ -48,23 +48,13 @@ const CalendarView: React.FC<CalendarViewProps> = ({ onViewJob, onAddJob }) => {
                     const timestamp = historyEntry.timestamp;
                     const hasTime = timestamp.includes('T');
                     
-                    const displayDate = hasTime ? new Date(timestamp) : new Date(`${timestamp}T00:00:00`);
+                    const displayDate = new Date(timestamp);
 
                     let effectiveTime: string | undefined;
                     if (hasTime) {
                         const hours = String(displayDate.getHours()).padStart(2, '0');
                         const minutes = String(displayDate.getMinutes()).padStart(2, '0');
                         effectiveTime = `${hours}:${minutes}`;
-                    } else {
-                        // FIX: This commit resolves TypeScript errors by refactoring the component to be fully compatible with the `statusHistory`-based data model. It removes dependencies on deprecated `status` and `date` properties by creating a robust fallback mechanism for older `JobTicket` data. The logic for determining an event's effective time has also been improved to prevent reliance on the non-existent `ticket.time` property, ensuring data consistency and eliminating type errors.
-                        // For all-day events, check if any history entry for the ticket has a time,
-                        // especially for scheduled statuses.
-                        if (historyEntry.status === 'Scheduled' || historyEntry.status === 'Estimate Scheduled') {
-                            const timeEntry = ticket.statusHistory?.find(h => h.timestamp.includes('T'));
-                            if (timeEntry) {
-                                effectiveTime = timeEntry.timestamp.split('T')[1].substring(0,5);
-                            }
-                        }
                     }
                     
                     const localDateString = getLocalDateString(displayDate);

@@ -38,9 +38,6 @@ interface JobTicketModalProps {
 }
 
 const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose, jobTemplates, partsCatalog, enabledStatuses, defaultSalesTaxRate, defaultProcessingFeeRate, contactAddress, apiKey }) => {
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('');
-  const [duration, setDuration] = useState<number | ''>('');
   const [jobLocation, setJobLocation] = useState('');
   const [jobLocationContactName, setJobLocationContactName] = useState('');
   const [jobLocationContactPhone, setJobLocationContactPhone] = useState('');
@@ -61,18 +58,6 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
 
   useEffect(() => {
     if (entry) {
-      // FIX: This commit resolves multiple TypeScript errors by refactoring the modal to align with the `statusHistory`-based data model. It removes dependencies on deprecated `date`, `time`, and `status` properties from the `JobTicket` type. The modal now correctly derives its initial state from the latest status entry and, upon saving, updates this entry with any changes, ensuring data consistency and eliminating type errors during form submission and calculation.
-      const latestStatusEntry = (entry.statusHistory && entry.statusHistory.length > 0)
-        ? [...entry.statusHistory].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0]
-        : null;
-
-      const entryDate = latestStatusEntry ? latestStatusEntry.timestamp.split('T')[0] : (entry.createdAt ? entry.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]);
-      const entryTime = latestStatusEntry && latestStatusEntry.timestamp.includes('T') ? latestStatusEntry.timestamp.split('T')[1].substring(0, 5) : undefined;
-      const entryDuration = latestStatusEntry?.duration;
-
-      setDate(entryDate);
-      setTime(entryTime || '');
-      setDuration(entryDuration ?? '');
       setJobLocation(entry.jobLocation || '');
       setJobLocationContactName(entry.jobLocationContactName || '');
       setJobLocationContactPhone(entry.jobLocationContactPhone || '');
@@ -92,9 +77,6 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
       setStatusHistory(history);
 
     } else {
-      setDate(new Date().toISOString().split('T')[0]);
-      setTime('');
-      setDuration('');
       setJobLocation(contactAddress || '');
       setJobLocationContactName('');
       setJobLocationContactPhone('');
@@ -231,21 +213,9 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // FIX: This commit resolves multiple TypeScript errors by refactoring the modal to align with the `statusHistory`-based data model. It removes dependencies on deprecated `date`, `time`, and `status` properties from the `JobTicket` type. The modal now correctly derives its initial state from the latest status entry and, upon saving, updates this entry with any changes, ensuring data consistency and eliminating type errors during form submission and calculation.
-    const sortedHistory = [...statusHistory].sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-    const latestStatusEntry = sortedHistory[0];
-
-    if (latestStatusEntry) {
-        const newTimestamp = new Date(`${date}T${time || '00:00:00'}`);
-        latestStatusEntry.timestamp = newTimestamp.toISOString();
-        if (duration === '' || duration == null) {
-            delete latestStatusEntry.duration;
-        } else {
-            latestStatusEntry.duration = Number(duration);
-        }
-    }
-    
-    const finalHistory = sortedHistory;
+    // The statusHistory state is already up-to-date from handleHistoryChange.
+    // We just need to ensure it's sorted correctly before saving.
+    const finalHistory = [...statusHistory].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
     const savedEntry: Omit<JobTicket, 'id'> & { id?: string } = {
         id: entry?.id,
@@ -303,22 +273,6 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
           </div>
 
           <div className="p-6 space-y-6 overflow-y-auto flex-grow min-h-0">
-            {/* Main Details */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label htmlFor="date" className={labelStyles}>Date</label>
-                <input id="date" type="date" value={date} onChange={e => setDate(e.target.value)} required className={`mt-1 ${inputStyles}`} />
-              </div>
-              <div>
-                <label htmlFor="time" className={labelStyles}>Time</label>
-                <input id="time" type="time" value={time} onChange={e => setTime(e.target.value)} className={`mt-1 ${inputStyles}`} />
-              </div>
-              <div>
-                <label htmlFor="duration" className={labelStyles}>Duration (minutes)</label>
-                <input id="duration" type="number" value={duration} onChange={e => setDuration(e.target.value === '' ? '' : parseInt(e.target.value))} className={`mt-1 ${inputStyles}`} placeholder="e.g. 60"/>
-              </div>
-            </div>
-
             {/* Location */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                <div>
@@ -388,104 +342,107 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
                   </div>
                   <div>
                       <label htmlFor="part-select" className={labelStyles}>Quick Add from Catalog</label>
-                      <select id="part-select" onChange={e => { handleQuickAddPart(e.target.value); e.target.value = ''; }} className={`mt-1 ${inputStyles}`} value="">
-                          <option value="">Add a part...</option>
-                          {partsCatalog?.map(item => <option key={item.id} value={item.id}>{item.name} (${item.defaultCost})</option>)}
+                      <select id="part-select" onChange={e => { handleQuickAddPart(e.target.value); (e.target as HTMLSelectElement).value = ''; }} className={`mt-1 ${inputStyles}`} value="">
+                          <option value="">Select a part...</option>
+                          {partsCatalog?.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
                       </select>
                   </div>
                 </div>
 
+                {/* Parts */}
                 <div>
-                  <label className={labelStyles}>Parts & Labor</label>
-                  <div className="mt-2 p-4 border border-slate-200 dark:border-slate-700 rounded-lg space-y-3">
-                    {parts.map((part) => (
-                      <div key={part.id} className="grid grid-cols-[1fr_80px_120px_40px] gap-2 items-center">
-                        <input type="text" placeholder="Part/Service Name" value={part.name} onChange={(e) => handlePartChange(part.id, 'name', e.target.value)} className={inputStyles} />
-                        <input type="number" placeholder="1" value={part.quantity} onChange={(e) => handlePartChange(part.id, 'quantity', e.target.value)} className={`${inputStyles} text-center`} min="1" />
-                        <div className="relative">
-                          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3"><span className="text-slate-500 sm:text-sm">$</span></div>
-                          <input type="number" placeholder="0.00" value={part.cost} onChange={(e) => handlePartChange(part.id, 'cost', e.target.value)} className={`${inputStyles} pl-7 pr-2`} step="0.01" />
-                        </div>
-                        <button type="button" onClick={() => handleRemovePart(part.id)} className="p-2 text-slate-500 dark:text-slate-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-full"><TrashIcon className="w-4 h-4" /></button>
-                      </div>
-                    ))}
+                    <h4 className="text-md font-medium text-slate-700 dark:text-slate-200 mb-2">Parts & Services</h4>
+                    <div className="space-y-2">
+                        {parts.map((part, index) => (
+                            <div key={part.id} className="grid grid-cols-1 sm:grid-cols-[1fr_80px_120px_40px] gap-2 items-center">
+                                <input type="text" placeholder="Part/Service Name" value={part.name} onChange={(e) => handlePartChange(part.id, 'name', e.target.value)} className={inputStyles} aria-label="Part or Service" />
+                                <input type="number" placeholder="1" value={part.quantity} onChange={(e) => handlePartChange(part.id, 'quantity', e.target.value)} className={`${inputStyles} text-center`} min="1" aria-label="Quantity" />
+                                <div className="relative">
+                                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3"><span className="text-slate-500 sm:text-sm">$</span></div>
+                                    <input type="number" placeholder="0.00" value={part.cost} onChange={(e) => handlePartChange(part.id, 'cost', e.target.value)} className={`${inputStyles} pl-7 pr-2`} aria-label="Price" />
+                                </div>
+                                <button type="button" onClick={() => handleRemovePart(part.id)} className="p-2 text-slate-500 dark:text-slate-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-full justify-self-end sm:justify-self-center">
+                                    <TrashIcon className="w-4 h-4" />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
                     <button type="button" onClick={handleAddPart} className="mt-2 flex items-center px-3 py-1.5 rounded-md text-sm font-medium text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/50 hover:bg-sky-100 dark:hover:bg-sky-900">
-                      <PlusIcon className="w-4 h-4 mr-2" /> Add Part
+                        <PlusIcon className="w-4 h-4 mr-2" /> Add Part
                     </button>
-                    <div className="pt-3 mt-3 border-t border-slate-200 dark:border-slate-600">
-                      <label htmlFor="labor-cost" className={labelStyles}>Labor Cost</label>
-                      <div className="relative mt-1">
-                          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3"><span className="text-slate-500 sm:text-sm">$</span></div>
-                          <input type="number" id="labor-cost" value={laborCost} onChange={(e) => setLaborCost(e.target.value === '' ? '' : parseFloat(e.target.value))} className={`${inputStyles} pl-7`} step="0.01" />
-                      </div>
-                    </div>
-                  </div>
                 </div>
-                <div>
-                  <label className={labelStyles}>Taxes, Fees & Payments</label>
-                  <div className="mt-2 p-4 border border-slate-200 dark:border-slate-700 rounded-lg grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label htmlFor="sales-tax-rate" className={labelStyles}>Sales Tax (%)</label>
-                      <input type="number" id="sales-tax-rate" value={salesTaxRate} onChange={(e) => setSalesTaxRate(e.target.value === '' ? '' : parseFloat(e.target.value))} className={`mt-1 ${inputStyles}`} step="0.01" />
-                    </div>
-                    <div>
-                      <label htmlFor="processing-fee-rate" className={labelStyles}>Card Fee (%)</label>
-                      <input type="number" id="processing-fee-rate" value={processingFeeRate} onChange={(e) => setProcessingFeeRate(e.target.value === '' ? '' : parseFloat(e.target.value))} className={`mt-1 ${inputStyles}`} step="0.01" />
-                    </div>
-                    <div>
-                      <label htmlFor="payment-status" className={labelStyles}>Payment Status</label>
-                      <select id="payment-status" value={paymentStatus} onChange={e => setPaymentStatus(e.target.value as PaymentStatus)} className={`mt-1 ${inputStyles}`}>
-                          <option value="unpaid">Unpaid</option>
-                          <option value="deposit_paid">Deposit Paid</option>
-                          <option value="paid_in_full">Paid in Full</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label htmlFor="deposit" className={labelStyles}>Deposit Amount</label>
-                      <div className="relative mt-1">
-                          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3"><span className="text-slate-500 sm:text-sm">$</span></div>
-                          <input type="number" id="deposit" value={deposit} onChange={(e) => setDeposit(e.target.value === '' ? '' : parseFloat(e.target.value))} className={`${inputStyles} pl-7`} step="0.01" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-            </div>
 
-            {/* Notes */}
-            <div>
-              <label htmlFor="notes" className={labelStyles}>Job Notes</label>
-              <textarea id="notes" value={notes} onChange={e => setNotes(e.target.value)} rows={3} className={`mt-1 ${inputStyles}`} placeholder="Job details, customer requests..."></textarea>
+                 {/* Costs */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label htmlFor="labor-cost" className={labelStyles}>Labor Cost</label>
+                        <div className="relative mt-1">
+                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3"><span className="text-slate-500 sm:text-sm">$</span></div>
+                            <input type="number" id="labor-cost" value={laborCost} onChange={(e) => setLaborCost(e.target.value === '' ? '' : parseFloat(e.target.value))} className={`${inputStyles} pl-7`} />
+                        </div>
+                    </div>
+                     <div>
+                        <label htmlFor="deposit" className={labelStyles}>Deposit Paid</label>
+                        <div className="relative mt-1">
+                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3"><span className="text-slate-500 sm:text-sm">$</span></div>
+                            <input type="number" id="deposit" value={deposit} onChange={(e) => setDeposit(e.target.value === '' ? '' : parseFloat(e.target.value))} className={`${inputStyles} pl-7`} />
+                        </div>
+                    </div>
+                </div>
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label htmlFor="paymentStatus" className={labelStyles}>Payment Status</label>
+                        <select id="paymentStatus" value={paymentStatus} onChange={e => setPaymentStatus(e.target.value as PaymentStatus)} className={`mt-1 ${inputStyles}`}>
+                            <option value="unpaid">Unpaid</option>
+                            <option value="deposit_paid">Deposit Paid</option>
+                            <option value="paid_in_full">Paid in Full</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label htmlFor="sales-tax-rate" className={labelStyles}>Sales Tax (%)</label>
+                        <input type="number" id="sales-tax-rate" value={salesTaxRate} onChange={(e) => setSalesTaxRate(e.target.value === '' ? '' : parseFloat(e.target.value))} className={`mt-1 ${inputStyles}`} step="0.01" placeholder="e.g. 8.5" />
+                    </div>
+                    <div>
+                        <label htmlFor="processing-fee-rate" className={labelStyles}>Card Fee (%)</label>
+                        <input type="number" id="processing-fee-rate" value={processingFeeRate} onChange={(e) => setProcessingFeeRate(e.target.value === '' ? '' : parseFloat(e.target.value))} className={`mt-1 ${inputStyles}`} step="0.01" placeholder="e.g. 2.9" />
+                    </div>
+                </div>
             </div>
             
-          </div>
-
-          <div className="bg-slate-50 dark:bg-slate-900 px-6 py-4 flex flex-col lg:flex-row justify-between lg:items-center rounded-b-lg border-t dark:border-slate-700 flex-shrink-0">
-            <div className="flex items-center gap-4">
-                 <div className="flex items-center space-x-2">
-                    <button type="submit" className="px-4 py-2 rounded-md text-sm font-medium text-white bg-sky-500 hover:bg-sky-600 transition-colors shadow-sm">Save Job</button>
-                    <button type="button" onClick={onClose} className="px-4 py-2 rounded-md text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors">Cancel</button>
-                 </div>
+            {/* Notes */}
+            <div>
+                <label htmlFor="jobNotes" className={labelStyles}>Job Notes</label>
+                <textarea id="jobNotes" value={notes} onChange={e => setNotes(e.target.value)} rows={4} className={`mt-1 ${inputStyles}`} placeholder="Details about the job..."></textarea>
             </div>
-            <div className="mt-4 lg:mt-0 text-right">
-                <p className="font-bold text-2xl text-slate-800 dark:text-slate-100">${totalCost.toFixed(2)}</p>
-                <p className="text-sm text-slate-500 dark:text-slate-400">Balance Due: ${balanceDue.toFixed(2)}</p>
+
+          </div>
+          
+          <div className="bg-slate-50 dark:bg-slate-900 px-6 py-4 flex justify-between items-center rounded-b-lg border-t dark:border-slate-700 flex-shrink-0">
+            <div className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                <span>Total: ${totalCost.toFixed(2)}</span>
+                <span className="ml-4">Balance: ${balanceDue.toFixed(2)}</span>
+            </div>
+            <div className="flex space-x-2">
+                <button type="button" onClick={onClose} className="px-4 py-2 rounded-md text-sm font-medium text-slate-700 dark:text-slate-200 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors">
+                Cancel
+                </button>
+                <button type="submit" className="px-4 py-2 rounded-md text-sm font-medium text-white bg-sky-500 hover:bg-sky-600 transition-colors">
+                Save Job
+                </button>
             </div>
           </div>
         </form>
       </div>
     </div>
-     {isTemplateConfirmOpen && (
+    {isTemplateConfirmOpen && (
         <ConfirmationModal
             isOpen={isTemplateConfirmOpen}
-            onClose={() => {
-                setIsTemplateConfirmOpen(false);
-                setTemplateToApply(null);
-            }}
+            onClose={() => setIsTemplateConfirmOpen(false)}
             onConfirm={applyTemplate}
             title="Apply Template"
-            message="Applying this template will overwrite existing notes, parts, and cost details. Are you sure you want to continue?"
+            message="This will overwrite existing notes, parts, and costs. Are you sure?"
             confirmText="Apply"
-            confirmButtonClass="bg-sky-600 hover:bg-sky-700"
+            confirmButtonClass="bg-sky-500 hover:bg-sky-600"
         />
     )}
     </>

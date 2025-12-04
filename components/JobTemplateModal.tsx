@@ -18,14 +18,12 @@ const JobTemplateModal: React.FC<JobTemplateModalProps> = ({ template, onSave, o
   const [processingFeeRate, setProcessingFeeRate] = useState<number | ''>(0);
 
   useEffect(() => {
-    if (template) {
-      setName(template.name);
-      setNotes(template.notes);
-      setParts(template.parts.map(p => ({...p})));
-      setLaborCost(template.laborCost);
-      setSalesTaxRate(template.salesTaxRate || 0);
-      setProcessingFeeRate(template.processingFeeRate || 0);
-    }
+    setName(template?.name || '');
+    setNotes(template?.notes || '');
+    setParts(template?.parts.map(p => ({...p})) || []);
+    setLaborCost(template?.laborCost || 0);
+    setSalesTaxRate(template?.salesTaxRate || 0);
+    setProcessingFeeRate(template?.processingFeeRate || 0);
   }, [template]);
 
   const handleAddPart = () => {
