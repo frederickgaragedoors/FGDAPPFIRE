@@ -60,9 +60,12 @@ export const generatePdf = async ({ contact, ticket, businessInfo, docType }: Ge
         else displayTitle = 'INVOICE';
     }
 
+    // FIX: Access legacy 'inspection' property via type assertion to resolve TypeScript error.
+    // The data model has been updated to use 'inspections', but this provides backward compatibility for PDF generation.
+    const legacyInspection = (ticket as any).inspection;
     const allInspections: SafetyInspection[] = ticket.inspections && ticket.inspections.length > 0 
         ? ticket.inspections 
-        : (ticket.inspection && ticket.inspection.length > 0 ? [{ id: 'legacy', name: 'Safety Inspection', items: ticket.inspection }] : []);
+        : (legacyInspection && legacyInspection.length > 0 ? [{ id: 'legacy', name: 'Safety Inspection', items: legacyInspection }] : []);
 
     const hasInspectionResults = allInspections.some(inspection =>
         inspection.items.some(i => ['Pass', 'Fail', 'Repaired'].includes(i.status || 'N/A'))
