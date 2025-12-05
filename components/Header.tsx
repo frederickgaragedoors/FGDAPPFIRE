@@ -1,8 +1,6 @@
-
-
 import React from 'react';
 import { ViewState } from '../types.ts';
-import { PlusIcon, SettingsIcon, ClipboardListIcon, UsersIcon, CalendarIcon, MapIcon, CurrencyDollarIcon, ChartBarIcon, CarIcon } from './icons.tsx';
+import { PlusIcon, SettingsIcon, ClipboardListIcon, UsersIcon, CalendarIcon, MapIcon, CurrencyDollarIcon, ChartBarIcon, CarIcon, MegaphoneIcon } from './icons.tsx';
 
 interface HeaderProps {
     currentView: ViewState['type'];
@@ -15,6 +13,7 @@ interface HeaderProps {
     onGoToExpenses: () => void;
     onGoToReports: () => void;
     onGoToMileage: () => void;
+    onGoToSocial: () => void;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -28,6 +27,7 @@ const Header: React.FC<HeaderProps> = ({
     onGoToExpenses,
     onGoToReports,
     onGoToMileage,
+    onGoToSocial,
 }) => {
     const isDashboardActive = currentView === 'dashboard';
     const isCalendarActive = currentView === 'calendar';
@@ -35,7 +35,8 @@ const Header: React.FC<HeaderProps> = ({
     const isExpensesActive = currentView === 'expenses';
     const isReportsActive = currentView === 'reports';
     const isMileageActive = currentView === 'mileage';
-    const isListActive = !isDashboardActive && !isCalendarActive && !isRouteActive && !isExpensesActive && !isReportsActive && !isMileageActive && currentView !== 'settings';
+    const isSocialActive = currentView === 'social';
+    const isListActive = !isDashboardActive && !isCalendarActive && !isRouteActive && !isExpensesActive && !isReportsActive && !isMileageActive && !isSocialActive && currentView !== 'settings';
 
     const buttonClass = (active: boolean) => 
         `flex items-center space-x-2 px-3 py-1 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
@@ -70,6 +71,10 @@ const Header: React.FC<HeaderProps> = ({
                 <button onClick={onGoToExpenses} className={buttonClass(isExpensesActive)} aria-label="Expenses">
                     <CurrencyDollarIcon className="w-5 h-5" />
                     <span className="hidden sm:inline">Expenses</span>
+                </button>
+                 <button onClick={onGoToSocial} className={buttonClass(isSocialActive)} aria-label="Social Media">
+                    <MegaphoneIcon className="w-5 h-5" />
+                    <span className="hidden sm:inline">Social</span>
                 </button>
                 <button onClick={onGoToList} className={buttonClass(isListActive)} aria-label="Contacts">
                     <UsersIcon className="w-5 h-5" />

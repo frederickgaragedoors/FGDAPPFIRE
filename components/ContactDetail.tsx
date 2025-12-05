@@ -1,7 +1,8 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { Contact, FileAttachment, JobTicket, jobStatusColors, paymentStatusColors, paymentStatusLabels, DoorProfile, StatusHistoryEntry, JobStatus } from '../types.ts';
+import { Contact, FileAttachment, JobTicket, jobStatusColors, paymentStatusColors, paymentStatusLabels, DoorProfile, StatusHistoryEntry, JobStatus, SafetyInspection, Quote, QuoteStatus } from '../types.ts';
 import { useContacts } from '../contexts/ContactContext.tsx';
 import { useApp } from '../contexts/AppContext.tsx';
+import { useNavigation } from '../contexts/NavigationContext.tsx';
 import { useNotifications } from '../contexts/NotificationContext.tsx';
 import PhotoGalleryModal from './PhotoGalleryModal.tsx';
 import JobTicketModal from './JobTicketModal.tsx';
@@ -28,6 +29,7 @@ import {
   EllipsisVerticalIcon,
   PencilSquareIcon,
   PrinterIcon,
+  ClipboardDocumentListIcon,
 } from './icons.tsx';
 import { fileToDataUrl, formatFileSize, getInitials, generateId, calculateJobTicketTotal, formatTime, formatPhoneNumber } from '../utils.ts';
 
@@ -40,15 +42,6 @@ interface ContactDetailProps {
     initialJobDate?: string;
     openJobId?: string;
 }
-
-const VIEWABLE_MIME_TYPES = [
-    'application/pdf',
-    'text/plain',
-    'text/csv',
-    'text/html',
-    'text/xml',
-    'image/svg+xml',
-];
 
 const ContactDetail: React.FC<ContactDetailProps> = ({ 
     contact, 
@@ -64,13 +57,15 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
         handleUpdateContactJobTickets,
         handleDeleteContact,
         handleTogglePinContact,
+        handleDeleteQuote,
     } = useContacts();
     const { 
         defaultFields, jobTemplates, partsCatalog, enabledStatuses, businessInfo, showContactPhotos, mapSettings 
     } = useApp();
+    const { setViewState } = useNavigation();
     const { addNotification } = useNotifications();
     
-    const [activeTab, setActiveTab] = useState<'details' | 'profiles' | 'files'>('details');
+    const [activeTab, setActiveTab] = useState<'details' | 'quotes' | 'profiles' | 'files'>('details');
     const [isGalleryOpen, setIsGalleryOpen] = useState(false);
     const [galleryCurrentIndex, setGalleryCurrentIndex] = useState(0);
     const [showPhotoOptions, setShowPhotoOptions] = useState(false);
@@ -78,7 +73,9 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
     const [editingJobTicket, setEditingJobTicket] = useState<JobTicket | null>(null);
     const [isLoadingFiles, setIsLoadingFiles] = useState(false);
     const [isContactDeleteConfirmOpen, setIsContactDeleteConfirmOpen] = useState(false);
+    const [isDeletingContact, setIsDeletingContact] = useState(false);
     const [jobTicketToDeleteId, setJobTicketToDeleteId] = useState<string | null>(null);
+    const [quoteToDelete, setQuoteToDelete] = useState<Quote | null>(null);
     const [jobMenuOpen, setJobMenuOpen] = useState<string | null>(null);
     const [jobModalKey, setJobModalKey] = useState(Date.now());
 
@@ -107,7 +104,6 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
         if (initialJobDate && processedParamsRef.current.date !== initialJobDate) {
             processedParamsRef.current.date = initialJobDate;
             const actualDate = initialJobDate.split('_')[0];
-            // FIX: This commit addresses multiple TypeScript errors stemming from an incomplete refactor of the JobTicket data model. The code has been updated to consistently derive job details like status, date, and time from the `statusHistory` array instead of relying on deprecated top-level properties. This includes fixing fallback logic for older data, updating display components to use the new data source, and correcting how new job tickets are initialized to ensure they conform to the modern schema.
             const scheduledTimestamp = new Date(`${actualDate}T09:00:00`).toISOString();
             const createdAt = new Date().toISOString();
             setEditingJobTicket({
@@ -223,23 +219,23 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
     };
 
     const performDeleteContact = async () => {
+        setIsDeletingContact(true);
         const success = await handleDeleteContact(contact.id);
         if (success) {
-            onClose(); // Navigate away only on successful deletion
+            onClose();
         }
-        // Modal is closed by its onConfirm handler
+        setIsContactDeleteConfirmOpen(false);
+        setIsDeletingContact(false);
     };
     
     const sortedJobTickets = useMemo(() => {
         if (!contact.jobTickets) return [];
         
         return [...contact.jobTickets]
-            // FIX: This commit addresses multiple TypeScript errors stemming from an incomplete refactor of the JobTicket data model. The code has been updated to consistently derive job details like status, date, and time from the `statusHistory` array instead of relying on deprecated top-level properties. This includes fixing fallback logic for older data, updating display components to use the new data source, and correcting how new job tickets are initialized to ensure they conform to the modern schema.
             .map(ticket => {
                 let latestTimestamp: string;
                 if (ticket.statusHistory && ticket.statusHistory.length > 0) {
                     const history = [...ticket.statusHistory];
-                    // Find the most recent timestamp
                     latestTimestamp = history.reduce((latest, entry) => {
                         return new Date(entry.timestamp) > new Date(latest) ? entry.timestamp : latest;
                     }, history[0].timestamp);
@@ -249,24 +245,23 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
     
                 return { ...ticket, latestTimestamp };
             })
-            // FIX: This commit addresses multiple TypeScript errors stemming from an incomplete refactor of the JobTicket data model. The code has been updated to consistently derive job details like status, date, and time from the `statusHistory` array instead of relying on deprecated top-level properties. This includes fixing fallback logic for older data, updating display components to use the new data source, and correcting how new job tickets are initialized to ensure they conform to the modern schema.
             .sort((a, b) => new Date(b.latestTimestamp).getTime() - new Date(a.latestTimestamp).getTime());
     }, [contact.jobTickets]);
 
+    const sortedQuotes = useMemo(() => {
+      return [...(contact.quotes || [])].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }, [contact.quotes]);
+
     const normalizedDoorProfiles = useMemo(() => {
-        const profiles: DoorProfile[] = contact.doorProfiles || [];
-        if ((contact as any).doorProfile) {
-             profiles.push((contact as any).doorProfile as DoorProfile);
-        }
-        return profiles.map(p => ({
+        return (contact.doorProfiles || []).map(p => ({
             ...p,
             id: p.id || generateId(),
-            doorInstallDate: p.doorInstallDate || (p as any).installDate || 'Unknown',
-            springInstallDate: p.springInstallDate || (p as any).installDate || 'Unknown',
-            openerInstallDate: p.openerInstallDate || (p as any).installDate || 'Unknown',
-            springs: p.springs || (p.springSize ? [{ id: generateId(), size: p.springSize }] : [])
+            doorInstallDate: p.doorInstallDate || 'Unknown',
+            springInstallDate: p.springInstallDate || 'Unknown',
+            openerInstallDate: p.openerInstallDate || 'Unknown',
+            springs: p.springs || []
         }));
-    }, [contact.doorProfiles, (contact as any).doorProfile]);
+    }, [contact.doorProfiles]);
 
     const formatInstallDate = (value: string | undefined) => {
         if (!value || value === 'Unknown' || value === 'Original') {
@@ -281,6 +276,13 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
         } catch(e) {
             return value;
         }
+    };
+
+    const quoteStatusColors: Record<QuoteStatus, string> = {
+        Draft: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
+        Sent: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
+        Accepted: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
+        Declined: 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300',
     };
 
     return (
@@ -383,6 +385,7 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
                     <nav className="-mb-px flex space-x-6" aria-label="Tabs">
                         {[
                             ['details', 'Job Tickets'], 
+                            ['quotes', 'Quotes'],
                             ['profiles', 'Door Profiles'], 
                             ['files', 'Attachments']
                         ].map(([id, name]) => (
@@ -406,7 +409,6 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
                         </div>
                         {sortedJobTickets.length > 0 ? (
                             <ul className="space-y-3">
-                                {/* FIX: This commit addresses multiple TypeScript errors stemming from an incomplete refactor of the JobTicket data model. The code has been updated to consistently derive job details like status, date, and time from the `statusHistory` array instead of relying on deprecated top-level properties. This includes fixing fallback logic for older data, updating display components to use the new data source, and correcting how new job tickets are initialized to ensure they conform to the modern schema. */}
                                 {sortedJobTickets.map(ticket => {
                                     const { totalCost } = calculateJobTicketTotal(ticket);
                                     const latestStatusEntry = (ticket.statusHistory && ticket.statusHistory.length > 0)
@@ -435,16 +437,13 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
                                             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
                                                 <div className="flex-grow">
                                                     <p className="text-sm text-slate-500 dark:text-slate-400">
-                                                        {/* FIX: This commit addresses multiple TypeScript errors stemming from an incomplete refactor of the JobTicket data model. The code has been updated to consistently derive job details like status, date, and time from the `statusHistory` array instead of relying on deprecated top-level properties. This includes fixing fallback logic for older data, updating display components to use the new data source, and correcting how new job tickets are initialized to ensure they conform to the modern schema. */}
                                                         {new Date(ticket.latestTimestamp).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
-                                                        {/* FIX: This commit addresses multiple TypeScript errors stemming from an incomplete refactor of the JobTicket data model. The code has been updated to consistently derive job details like status, date, and time from the `statusHistory` array instead of relying on deprecated top-level properties. This includes fixing fallback logic for older data, updating display components to use the new data source, and correcting how new job tickets are initialized to ensure they conform to the modern schema. */}
                                                         {ticketTime && <span className="ml-2 font-medium">{formatTime(ticketTime)}</span>}
                                                     </p>
                                                     <p className="mt-1 text-sm text-slate-600 dark:text-slate-300 truncate">{ticket.notes}</p>
                                                 </div>
                                                 <div className="flex items-center space-x-2 flex-shrink-0 self-start">
                                                     <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${paymentColor.base} ${paymentColor.text}`}>{paymentLabel}</span>
-                                                    {/* FIX: This commit addresses multiple TypeScript errors stemming from an incomplete refactor of the JobTicket data model. The code has been updated to consistently derive job details like status, date, and time from the `statusHistory` array instead of relying on deprecated top-level properties. This includes fixing fallback logic for older data, updating display components to use the new data source, and correcting how new job tickets are initialized to ensure they conform to the modern schema. */}
                                                     <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${statusColor.base} ${statusColor.text}`}>{currentStatus}</span>
                                                     <span className="font-bold text-slate-800 dark:text-slate-100">${totalCost.toFixed(2)}</span>
                                                 </div>
@@ -467,7 +466,54 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
                                 })}
                             </ul>
                         ) : (
-                           <EmptyState Icon={BriefcaseIcon} title="No Jobs Yet" message="Add a job ticket to track work for this contact."/>
+                           <EmptyState 
+                                Icon={BriefcaseIcon} 
+                                title="No Jobs Yet" 
+                                message="Add a job ticket to track work for this contact."
+                                actionText="Add New Job"
+                                onAction={() => { setEditingJobTicket(null); setJobModalKey(Date.now()); setIsJobTicketModalOpen(true); }}
+                            />
+                        )}
+                    </div>
+                )}
+                {activeTab === 'quotes' && (
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-center">
+                            <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Quotes ({sortedQuotes.length})</h3>
+                            <button onClick={() => setViewState({ type: 'quote_form', contactId: contact.id })} className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium text-white bg-sky-500 hover:bg-sky-600">
+                                <PlusIcon className="w-4 h-4" />
+                                <span>New Quote</span>
+                            </button>
+                        </div>
+                        {sortedQuotes.length > 0 ? (
+                            <ul className="space-y-3">
+                                {sortedQuotes.map(quote => (
+                                    <li key={quote.id} className="p-4 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
+                                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
+                                            <div className="flex-grow cursor-pointer" onClick={() => setViewState({ type: 'quote_view', contactId: contact.id, quoteId: quote.id })}>
+                                                <p className="font-semibold text-sky-700 dark:text-sky-400 hover:underline">{quote.title || `Quote #${quote.quoteNumber}`}</p>
+                                                <p className="text-sm text-slate-500 dark:text-slate-400">
+                                                    Created: {new Date(quote.createdAt).toLocaleDateString()}
+                                                </p>
+                                            </div>
+                                            <div className="flex items-center space-x-2 flex-shrink-0 self-start">
+                                                <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${quoteStatusColors[quote.status]}`}>{quote.status}</span>
+                                                <span className="text-sm font-medium text-slate-600 dark:text-slate-300">{quote.options.length} option{quote.options.length !== 1 && 's'}</span>
+                                            </div>
+                                            <div className="flex items-center">
+                                                <button onClick={() => setViewState({ type: 'quote_form', contactId: contact.id, quoteId: quote.id })} className="p-2 rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700" title="Edit Quote">
+                                                    <PencilSquareIcon className="w-5 h-5"/>
+                                                </button>
+                                                <button onClick={() => setQuoteToDelete(quote)} className="p-2 rounded-full text-slate-500 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/50" title="Delete Quote">
+                                                    <TrashIcon className="w-5 h-5"/>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : (
+                           <EmptyState Icon={ClipboardDocumentListIcon} title="No Quotes Yet" message="Create multi-option quotes for new installations or large repairs."/>
                         )}
                     </div>
                 )}
@@ -495,7 +541,13 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
                                 ))}
                              </div>
                          ) : (
-                             <EmptyState Icon={HomeIcon} title="No System Profiles" message="Add door, spring, or opener information by editing this contact." />
+                            <EmptyState 
+                                Icon={HomeIcon} 
+                                title="No System Profiles" 
+                                message="Add door, spring, or opener information for this contact." 
+                                actionText="Add New Profile"
+                                onAction={onEdit}
+                            />
                          )}
                     </div>
                 )}
@@ -578,6 +630,7 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
                     onConfirm={performDeleteContact}
                     title="Delete Contact"
                     message={`Are you sure you want to delete ${contact.name}? This will also delete all associated jobs and files. This action cannot be undone.`}
+                    isConfirming={isDeletingContact}
                 />
             )}
              {jobTicketToDeleteId && (
@@ -587,6 +640,18 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
                     onConfirm={performDeleteJobTicket}
                     title="Delete Job Ticket"
                     message="Are you sure you want to delete this job ticket? This action cannot be undone."
+                />
+            )}
+            {quoteToDelete && (
+                <ConfirmationModal
+                    isOpen={!!quoteToDelete}
+                    onClose={() => setQuoteToDelete(null)}
+                    onConfirm={() => {
+                        handleDeleteQuote(contact.id, quoteToDelete.id);
+                        setQuoteToDelete(null);
+                    }}
+                    title="Delete Quote"
+                    message={`Are you sure you want to delete the quote "${quoteToDelete.title}"? This cannot be undone.`}
                 />
             )}
         </div>

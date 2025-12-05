@@ -175,7 +175,13 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ isOpen, mileage, onSave, on
                             <button type="button" onClick={handleCalculateDistance} disabled={isCalculating || !isMapsLoaded} className="text-sm font-medium text-sky-600 hover:text-sky-700 disabled:opacity-50 disabled:cursor-not-allowed">
                                 {isCalculating ? 'Calculating...' : 'Calculate Distance'}
                             </button>
-                            {mapsError && <p className="text-xs text-red-500 mt-1">{mapsError.message}</p>}
+                            {mapsError && (
+                                <div className="mt-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-md text-xs text-amber-700 dark:text-amber-300">
+                                    <p className="font-semibold">Map Service Error</p>
+                                    <p>Address features may fail. Please check your API Key in <span className="font-bold">Settings &gt; Map & Route Settings</span>.</p>
+                                    <p className="mt-1 opacity-70">Details: {mapsError.message}</p>
+                                </div>
+                            )}
                         </div>
                         <div>
                             <label htmlFor="notes" className={labelStyles}>Notes / Purpose</label>

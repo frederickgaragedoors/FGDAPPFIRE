@@ -54,6 +54,7 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
   const [templateToApply, setTemplateToApply] = useState<string | null>(null);
 
   const locationInputRef = useRef<HTMLInputElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
   const { isLoaded: isMapsLoaded, error: mapsError } = useGoogleMaps(apiKey);
 
   useEffect(() => {
@@ -69,10 +70,8 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
       setProcessingFeeRate(entry.processingFeeRate || 0);
       setDeposit(entry.deposit || 0);
 
-      // FIX: This commit resolves multiple TypeScript errors by refactoring the modal to align with the `statusHistory`-based data model. It removes dependencies on deprecated `date`, `time`, and `status` properties from the `JobTicket` type. The modal now correctly derives its initial state from the latest status entry and, upon saving, updates this entry with any changes, ensuring data consistency and eliminating type errors during form submission and calculation.
       const history = entry.statusHistory && entry.statusHistory.length > 0
           ? [...entry.statusHistory].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-          // FIX: Cast 'Job Created' to JobStatus to satisfy TypeScript's strict type checking. The type was being inferred as a generic 'string'.
           : [{ id: generateId(), status: 'Job Created' as JobStatus, timestamp: entry.createdAt || new Date().toISOString(), notes: 'Job created.' }];
       setStatusHistory(history);
 
@@ -113,6 +112,43 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
         });
     }
   }, [isMapsLoaded]);
+
+  // Focus trap for accessibility
+  useEffect(() => {
+    const modalElement = modalRef.current;
+    if (!modalElement) return;
+
+    const focusableElements = modalElement.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Tab') {
+          if (e.shiftKey) { // Shift+Tab
+              if (document.activeElement === firstElement) {
+                  lastElement.focus();
+                  e.preventDefault();
+              }
+          } else { // Tab
+              if (document.activeElement === lastElement) {
+                  firstElement.focus();
+                  e.preventDefault();
+              }
+          }
+      } else if (e.key === 'Escape') {
+          onClose();
+      }
+    };
+    
+    document.addEventListener('keydown', handleKeyDown);
+    firstElement?.focus();
+
+    return () => {
+        document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose]);
 
   const handleAddPart = () => {
     setParts([...parts, { id: generateId(), name: '', cost: 0, quantity: 1 }]);
@@ -169,6 +205,20 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
           setParts([...parts, { id: generateId(), name: item.name, cost: item.defaultCost, quantity: 1 }]);
       }
   };
+
+    const handleCalculate30PercentDeposit = useCallback(() => {
+        // We need to calculate the total cost based on current state, *without* considering any existing deposit.
+        const { totalCost: currentTotal } = calculateJobTicketTotal({
+            parts,
+            laborCost: Number(laborCost || 0),
+            salesTaxRate: Number(salesTaxRate || 0),
+            processingFeeRate: Number(processingFeeRate || 0),
+        });
+    
+        const thirtyPercent = currentTotal * 0.30;
+        // Round to 2 decimal places
+        setDeposit(parseFloat(thirtyPercent.toFixed(2)));
+    }, [parts, laborCost, salesTaxRate, processingFeeRate]);
 
   const handleHistoryChange = (id: string, field: keyof StatusHistoryEntry, value: string | number | undefined) => {
     setStatusHistory(prev => prev.map(item => {
@@ -240,7 +290,6 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
     return ALL_JOB_STATUSES.filter(s => enabledStatuses[s]);
   }, [enabledStatuses]);
   
-  // FIX: This commit resolves multiple TypeScript errors by refactoring the modal to align with the `statusHistory`-based data model. It removes dependencies on deprecated `date`, `time`, and `status` properties from the `JobTicket` type. The modal now correctly derives its initial state from the latest status entry and, upon saving, updates this entry with any changes, ensuring data consistency and eliminating type errors during form submission and calculation.
   const { totalCost, balanceDue } = calculateJobTicketTotal({
     ...entry, notes, parts,
     laborCost: Number(laborCost || 0),
@@ -256,7 +305,7 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
   return (
     <>
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
-      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+      <div ref={modalRef} className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
         <form onSubmit={handleSubmit} className="flex flex-col flex-grow min-h-0">
           <div className="p-6 border-b dark:border-slate-700 flex-shrink-0">
             <div className="flex justify-between items-start">
@@ -278,7 +327,12 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
                <div>
                     <label htmlFor="jobLocation" className={labelStyles}>Service Address</label>
                     <input ref={locationInputRef} id="jobLocation" type="text" value={jobLocation} onChange={e => setJobLocation(e.target.value)} className={`mt-1 ${inputStyles}`} autoComplete="off"/>
-                    {mapsError && <p className="text-xs text-red-500 mt-1">{mapsError.message}</p>}
+                    {mapsError && (
+                        <div className="mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-md text-xs text-amber-700 dark:text-amber-300">
+                            <p>Address autocomplete unavailable. Check your API Key in Settings.</p>
+                            <p className="opacity-70">{mapsError.message}</p>
+                        </div>
+                    )}
                 </div>
                  <div>
                     <label className={labelStyles}>Site Contact</label>
@@ -381,11 +435,20 @@ const JobTicketModal: React.FC<JobTicketModalProps> = ({ entry, onSave, onClose,
                             <input type="number" id="labor-cost" value={laborCost} onChange={(e) => setLaborCost(e.target.value === '' ? '' : parseFloat(e.target.value))} className={`${inputStyles} pl-7`} />
                         </div>
                     </div>
-                     <div>
+                    <div>
                         <label htmlFor="deposit" className={labelStyles}>Deposit Paid</label>
-                        <div className="relative mt-1">
-                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3"><span className="text-slate-500 sm:text-sm">$</span></div>
-                            <input type="number" id="deposit" value={deposit} onChange={(e) => setDeposit(e.target.value === '' ? '' : parseFloat(e.target.value))} className={`${inputStyles} pl-7`} />
+                        <div className="flex items-center space-x-2 mt-1">
+                            <div className="relative flex-grow">
+                                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3"><span className="text-slate-500 sm:text-sm">$</span></div>
+                                <input type="number" id="deposit" value={deposit} onChange={(e) => setDeposit(e.target.value === '' ? '' : parseFloat(e.target.value))} className={`${inputStyles} pl-7`} />
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleCalculate30PercentDeposit}
+                                className="px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                            >
+                                30%
+                            </button>
                         </div>
                     </div>
                 </div>

@@ -36,7 +36,6 @@ interface JobDetailViewProps {
   onViewRouteForDate: (date: string) => void;
 }
 
-// FIX: This commit resolves multiple TypeScript errors by refactoring the component to be fully compatible with the `statusHistory`-based data model. It removes all references to deprecated properties like `date`, `time`, and `status` on the `JobTicket` object. Job date and time are now correctly derived from the latest status entry, and the status-to-icon mapping has been updated to include 'Job Created', preventing crashes and ensuring data consistency.
 const statusToIconMap: Record<JobStatus, { Icon: React.FC<{className?: string}>, color: string }> = {
     'Job Created': { Icon: ClipboardListIcon, color: 'text-gray-500 dark:text-gray-400' },
     'Estimate Scheduled': { Icon: CalendarIcon, color: 'text-slate-500 dark:text-slate-400' },
@@ -93,7 +92,6 @@ const JobDetailView: React.FC<JobDetailViewProps> = ({
   const paymentLabel = paymentStatusLabels[ticket.paymentStatus || 'unpaid'];
   
   const sortedStatusHistory = useMemo(() => {
-    // FIX: This commit resolves multiple TypeScript errors by refactoring the component to be fully compatible with the `statusHistory`-based data model. It removes all references to deprecated properties like `date`, `time`, and `status` on the `JobTicket` object. Job date and time are now correctly derived from the latest status entry, and the status-to-icon mapping has been updated to include 'Job Created', preventing crashes and ensuring data consistency.
     const history = ticket.statusHistory && ticket.statusHistory.length > 0
         ? [...ticket.statusHistory]
         : (ticket.createdAt ? [{ id: generateId(), status: 'Job Created' as JobStatus, timestamp: ticket.createdAt, notes: 'Job Created' }] : []);
@@ -101,10 +99,8 @@ const JobDetailView: React.FC<JobDetailViewProps> = ({
   }, [ticket.statusHistory, ticket.createdAt]);
 
   const normalizedInspections = useMemo<SafetyInspection[]>(() => {
-      if (ticket.inspections && ticket.inspections.length > 0) return ticket.inspections;
-      if (ticket.inspection && ticket.inspection.length > 0) return [{ id: 'migrated', name: 'Safety Inspection', items: ticket.inspection }];
-      return [];
-  }, [ticket.inspections, ticket.inspection]);
+      return ticket.inspections || [];
+  }, [ticket.inspections]);
 
   const handleSaveJobTicket = (entry: Omit<JobTicket, 'id'> & { id?: string }) => {
     handleUpdateContactJobTickets(contact.id, entry);
@@ -131,22 +127,30 @@ const JobDetailView: React.FC<JobDetailViewProps> = ({
     } else {
         newInspections = [...normalizedInspections, inspectionData];
     }
-    handleUpdateContactJobTickets(contact.id, { ...ticket, inspections: newInspections, inspection: undefined });
+    handleUpdateContactJobTickets(contact.id, { ...ticket, inspections: newInspections });
     setEditingInspection(null);
   };
   
   const performDeleteInspection = () => {
     if (inspectionToDeleteId) {
       const newInspections = normalizedInspections.filter(i => i.id !== inspectionToDeleteId);
-      handleUpdateContactJobTickets(contact.id, { ...ticket, inspections: newInspections, inspection: undefined });
+      handleUpdateContactJobTickets(contact.id, { ...ticket, inspections: newInspections });
       setInspectionToDeleteId(null);
     }
   };
 
-  const jobDate = sortedStatusHistory[0] ? new Date(sortedStatusHistory[0].timestamp) : new Date();
-  const ticketTime = sortedStatusHistory[0] && sortedStatusHistory[0].timestamp.includes('T') 
+  const currentStatusEntry = sortedStatusHistory[0];
+  const currentStatus = currentStatusEntry?.status || 'Job Created';
+  const statusColor = jobStatusColors[currentStatus];
+  const jobDate = currentStatusEntry ? new Date(currentStatusEntry.timestamp) : new Date();
+  const ticketTime = currentStatusEntry && currentStatusEntry.timestamp.includes('T') 
     ? `${jobDate.getHours().toString().padStart(2, '0')}:${jobDate.getMinutes().toString().padStart(2, '0')}`
     : undefined;
+    
+  const displayDurationForStatus: JobStatus[] = ['Estimate Scheduled', 'Scheduled', 'In Progress', 'Supplier Run'];
+  const shouldDisplayDuration = currentStatusEntry && displayDurationForStatus.includes(currentStatusEntry.status);
+  const jobDuration = currentStatusEntry?.duration;
+
 
   return (
     <>
@@ -168,13 +172,24 @@ const JobDetailView: React.FC<JobDetailViewProps> = ({
                            <div className="flex justify-between items-start">
                                 <div>
                                     <p className="text-sm text-slate-500 dark:text-slate-400">
-                                      Scheduled for{' '}
+                                      Job for{' '}
                                       <span onClick={onBack} className="font-semibold text-slate-600 dark:text-slate-300 cursor-pointer hover:underline">
                                         {contact.name}
                                       </span>
                                     </p>
                                     <p className="text-lg font-semibold text-slate-800 dark:text-slate-100">{jobDate.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
                                     {ticketTime && <p className="text-lg font-bold text-sky-600 dark:text-sky-400">{formatTime(ticketTime)}</p>}
+                                     <div className="mt-2 flex items-center space-x-2">
+                                        <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${statusColor.base} ${statusColor.text}`}>
+                                            {currentStatus}
+                                        </span>
+                                        {shouldDisplayDuration && (
+                                            <div className="flex items-center text-xs text-slate-500 dark:text-slate-400">
+                                                <ClockIcon className="w-3.5 h-3.5 mr-1" />
+                                                <span>{jobDuration ?? 60} min</span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="flex space-x-2">
                                     <button onClick={() => setIsJobTicketModalOpen(true)} className="p-2 rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"><EditIcon className="w-5 h-5"/></button>
@@ -230,7 +245,6 @@ const JobDetailView: React.FC<JobDetailViewProps> = ({
                                                         {new Date(entry.timestamp).toLocaleString()}
                                                     </time>
                                                 </div>
-                                                {/* FIX: This commit resolves multiple TypeScript errors by refactoring the component to be fully compatible with the `statusHistory`-based data model. It removes all references to deprecated properties like `date`, `time`, and `status` on the `JobTicket` object. Job date and time are now correctly derived from the latest status entry, and the status-to-icon mapping has been updated to include 'Job Created', preventing crashes and ensuring data consistency. */}
                                                 <p className="text-sm font-normal text-slate-500 dark:text-slate-400 mt-1">{entry.notes}</p>
                                             </div>
                                         </li>

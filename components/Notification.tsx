@@ -1,8 +1,8 @@
 import React, { useEffect } from 'react';
 import { CheckCircleIcon, XCircleIcon, InformationCircleIcon, XIcon } from './icons.tsx';
-import { Notification as NotificationType } from '../contexts/NotificationContext.tsx';
+import { AppNotification } from '../types.ts';
 
-interface NotificationProps extends NotificationType {
+interface NotificationProps extends AppNotification {
     onDismiss: () => void;
 }
 

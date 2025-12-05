@@ -14,7 +14,7 @@ const MileageView: React.FC = () => {
     const { mileageLogs, handleSaveMileageLog, handleDeleteMileageLog, syncTripsForDate } = useMileage();
     const { contacts } = useContacts();
     const { mapSettings, businessInfo, settings } = useApp();
-    const { isLoaded: isMapsLoaded } = useGoogleMaps(mapSettings.apiKey);
+    const { isLoaded: isMapsLoaded, error: mapsError } = useGoogleMaps(mapSettings.apiKey);
     
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingMileage, setEditingMileage] = useState<Mileage | null>(null);
@@ -140,6 +140,13 @@ const MileageView: React.FC = () => {
                 </div>
 
                 <div className="p-4 sm:p-6 flex-grow space-y-6">
+                    {mapsError && (
+                        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg text-sm text-red-700 dark:text-red-300">
+                            <p className="font-bold mb-1">Map Service Error</p>
+                            <p>Could not connect to Google Maps. Trip syncing is disabled. Please check your API Key in Settings.</p>
+                            <p className="text-xs opacity-70 mt-2">{mapsError.message}</p>
+                        </div>
+                    )}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="bg-white dark:bg-slate-800 p-4 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
                             <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">Total Trips</h3>
@@ -220,7 +227,13 @@ const MileageView: React.FC = () => {
                             </div>
                         ) : (
                             <div className="p-8">
-                                <EmptyState Icon={CarIcon} title="No Trips Logged" message="Click 'Log New Trip' or 'Sync with Route' to get started." />
+                                <EmptyState 
+                                    Icon={CarIcon} 
+                                    title="No Trips Logged" 
+                                    message="Click 'Log New Trip' or 'Sync with Route' to get started."
+                                    actionText="Log New Trip"
+                                    onAction={handleNewEntry}
+                                />
                             </div>
                         )}
                     </div>

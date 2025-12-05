@@ -44,7 +44,12 @@ const CalendarView: React.FC<CalendarViewProps> = ({ onViewJob, onAddJob }) => {
                         notes: ticket.notes 
                     }] as StatusHistoryEntry[] : []);
 
-                return history.map(historyEntry => {
+                return history
+                    .filter(historyEntry => 
+                        historyEntry.status === 'Scheduled' || 
+                        historyEntry.status === 'Estimate Scheduled'
+                    )
+                    .map(historyEntry => {
                     const timestamp = historyEntry.timestamp;
                     const hasTime = timestamp.includes('T');
                     

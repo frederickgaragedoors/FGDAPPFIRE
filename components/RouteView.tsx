@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Supplier, Mileage, SavedRouteStop, RouteStop } from '../types.ts';
+import { Supplier, Mileage, SavedRouteStop, RouteStop, HomeStopData, JobStopData } from '../types.ts';
 import { useApp } from '../contexts/AppContext.tsx';
 import { ArrowLeftIcon, MapPinIcon, XIcon, PlusIcon } from './icons.tsx';
 import { generateId } from '../utils.ts';
@@ -8,6 +8,7 @@ import { useRoutePlanner } from '../hooks/useRoutePlanner.ts';
 import { useRouteMetrics } from '../hooks/useRouteMetrics.ts';
 import RouteSidebar from './RouteSidebar.tsx';
 import RouteMap from './RouteMap.tsx';
+import { useGoogleMaps } from '../hooks/useGoogleMaps.ts';
 
 // --- TYPE DEFINITIONS ---
 interface AddStopModalProps {
@@ -43,13 +44,15 @@ const AddStopModal: React.FC<AddStopModalProps> = ({ isOpen, onClose, onSave, su
     const canReturn = previousStop?.type === 'job';
     
     let previousJobName = '';
+    // FIX: Add type cast to resolve error when accessing property on a union type.
     if (previousStop?.type === 'job') {
-        previousJobName = previousStop.data.contactName;
+        previousJobName = (previousStop.data as JobStopData).contactName;
     }
     
     let nextStopName = 'your route';
+    // FIX: Add type cast to resolve error when accessing property on a union type.
     if (nextStop?.type === 'job') {
-        nextStopName = `job for ${nextStop.data.contactName}`;
+        nextStopName = `job for ${(nextStop.data as JobStopData).contactName}`;
     } else if (nextStop?.type === 'home') {
         nextStopName = 'Home';
     }
@@ -127,6 +130,7 @@ const getTomorrowDateString = () => {
 
 const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack, onViewJobDetail, initialDate }) => {
     const { mapSettings, businessInfo, handleSaveRoute, handleClearRouteForDate, routes } = useApp();
+    const { error: mapsError } = useGoogleMaps(mapSettings.apiKey);
     const [selectedDate, setSelectedDate] = useState(initialDate || getLocalDateString(new Date()));
     const [isAddStopModalOpen, setIsAddStopModalOpen] = useState(false);
     const [addStopIndex, setAddStopIndex] = useState<number | null>(null);
@@ -138,9 +142,10 @@ const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack, onViewJob
         // Automatically create a snapshot if one doesn't exist for the current view
         if (!routes[selectedDate] && routeStops.length > 1) {
              const simplifiedRoute: SavedRouteStop[] = routeStops.map((stop): SavedRouteStop => {
-                if (stop.type === 'home') return { type: 'home', label: stop.data.label };
-                if (stop.type === 'job') return { type: 'job', jobId: stop.data.id.split('-')[0], contactId: stop.data.contactId };
-                return { type: 'supplier', supplierId: stop.data.id, id: stop.id };
+                // FIX: Add explicit type casts to resolve TypeScript errors when accessing properties on the 'StopData' union type.
+                if (stop.type === 'home') return { type: 'home', label: (stop.data as HomeStopData).label };
+                if (stop.type === 'job') return { type: 'job', jobId: (stop.data as JobStopData).id.split('-')[0], contactId: (stop.data as JobStopData).contactId };
+                return { type: 'supplier', supplierId: (stop.data as Supplier).id, id: stop.id };
             });
             handleSaveRoute(selectedDate, simplifiedRoute);
         }
@@ -160,7 +165,8 @@ const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack, onViewJob
             if (
                 previousStop?.type === 'job' &&
                 nextStop?.type === 'job' &&
-                previousStop.data.id.split('-')[0] === nextStop.data.id.split('-')[0]
+                // FIX: Add explicit type casts to resolve TypeScript errors when accessing properties on the 'StopData' union type.
+                (previousStop.data as JobStopData).id.split('-')[0] === (nextStop.data as JobStopData).id.split('-')[0]
             ) {
                 newRoute.splice(stopIndex, 2);
             } else {
@@ -168,9 +174,10 @@ const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack, onViewJob
             }
             
             const simplifiedRoute: SavedRouteStop[] = newRoute.map((stop): SavedRouteStop => {
-                if (stop.type === 'home') return { type: 'home', label: stop.data.label };
-                if (stop.type === 'job') return { type: 'job', jobId: stop.data.id.split('-')[0], contactId: stop.data.contactId };
-                return { type: 'supplier', supplierId: stop.data.id, id: stop.id };
+                // FIX: Add explicit type casts to resolve TypeScript errors when accessing properties on the 'StopData' union type.
+                if (stop.type === 'home') return { type: 'home', label: (stop.data as HomeStopData).label };
+                if (stop.type === 'job') return { type: 'job', jobId: (stop.data as JobStopData).id.split('-')[0], contactId: (stop.data as JobStopData).contactId };
+                return { type: 'supplier', supplierId: (stop.data as Supplier).id, id: stop.id };
             });
             handleSaveRoute(selectedDate, simplifiedRoute);
         }
@@ -188,7 +195,7 @@ const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack, onViewJob
         if (nextAction === 'return') {
             const previousJob = routeStops[addStopIndex - 1];
             if (previousJob && previousJob.type === 'job') {
-                const returnJobStop: RouteStop = { ...previousJob, id: `${previousJob.data.id.split('-')[0]}-${Date.now()}` };
+                const returnJobStop: RouteStop = { ...previousJob, id: `${(previousJob.data as JobStopData).id.split('-')[0]}-${Date.now()}` };
                 newStops.splice(addStopIndex, 0, supplierStop, returnJobStop);
             } else {
                  newStops.splice(addStopIndex, 0, supplierStop);
@@ -198,13 +205,30 @@ const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack, onViewJob
         }
         
         const simplifiedRoute: SavedRouteStop[] = newStops.map((stop): SavedRouteStop => {
-            if (stop.type === 'home') return { type: 'home', label: stop.data.label };
-            if (stop.type === 'job') return { type: 'job', jobId: stop.data.id.split('-')[0], contactId: stop.data.contactId };
-            return { type: 'supplier', supplierId: stop.data.id, id: stop.id };
+            // FIX: Add explicit type casts to resolve TypeScript errors when accessing properties on the 'StopData' union type.
+            if (stop.type === 'home') return { type: 'home', label: (stop.data as HomeStopData).label };
+            if (stop.type === 'job') return { type: 'job', jobId: (stop.data as JobStopData).id.split('-')[0], contactId: (stop.data as JobStopData).contactId };
+            return { type: 'supplier', supplierId: (stop.data as Supplier).id, id: stop.id };
         });
         handleSaveRoute(selectedDate, simplifiedRoute);
         setIsAddStopModalOpen(false);
     };
+
+    if (mapsError) {
+        return (
+            <div className="h-full flex flex-col items-center justify-center text-center p-8 bg-slate-100 dark:bg-slate-900">
+                <MapPinIcon className="w-12 h-12 text-red-400 mb-4" />
+                <h2 className="text-xl font-bold text-slate-700 dark:text-slate-200">Map Service Error</h2>
+                <p className="mt-2 max-w-sm text-slate-500 dark:text-slate-400">
+                    Could not connect to Google Maps. The API Key may be invalid or missing required permissions.
+                </p>
+                <p className="mt-2 text-xs text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded-md max-w-sm">
+                    {mapsError.message}
+                </p>
+                <button onClick={onGoToSettings} className="mt-6 px-4 py-2 bg-sky-500 text-white font-medium rounded-md hover:bg-sky-600">Go to Settings</button>
+            </div>
+        );
+    }
 
     if (!mapSettings.apiKey || !mapSettings.homeAddress) {
         return (

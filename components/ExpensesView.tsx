@@ -1,8 +1,8 @@
 import React, { useState, useRef, useMemo } from 'react';
-import { GoogleGenAI, Type } from "@google/genai";
 import { useFinance } from '../contexts/FinanceContext.tsx';
 import { useApp } from '../contexts/AppContext.tsx';
 import { useNotifications } from '../contexts/NotificationContext.tsx';
+// FIX: Resolve TypeScript error by removing the import of `Type` from `types.ts`, as it is not defined there. Replaced enum usage with string literals for the `jsonSchema` object to correctly structure the data for the AI prompt.
 import { Expense, ExpenseCategory, BankTransaction, BankStatement, ALL_EXPENSE_CATEGORIES } from '../types.ts';
 import EmptyState from './EmptyState.tsx';
 import ExpenseFormModal from './ExpenseDetailModal.tsx';
@@ -86,7 +86,6 @@ const ExpensesView: React.FC = () => {
         const files = e.target.files; if (!files || files.length === 0) return;
         setIsProcessing(true); setProgress({ current: 0, total: files.length }); setErrors([]);
 
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         let newExpenses: Expense[] = [];
         const existingHashes = new Set(expenses.map(exp => exp.receiptHash).filter(Boolean));
         let skippedCount = 0;
@@ -106,13 +105,14 @@ const ExpensesView: React.FC = () => {
                 const receiptPart = { inlineData: { mimeType: file.type, data: base64Data } };
                 const categories: ExpenseCategory[] = ['Advertising', 'Office Supplies', 'Fuel', 'Building Materials', 'Meals & Entertainment', 'Tools & Equipment', 'Software', 'Utilities', 'Travel', 'Other', 'Bank & Processing Fee'];
                 
+                // FIX: Resolve TypeScript error by removing the import of `Type` from `types.ts`, as it is not defined there. Replaced enum usage with string literals for the `jsonSchema` object to correctly structure the data for the AI prompt.
                 const jsonSchema = {
-                    type: Type.OBJECT, properties: {
-                        vendor: { type: Type.STRING }, date: { type: Type.STRING, description: 'YYYY-MM-DD' },
-                        total: { type: Type.NUMBER }, tax: { type: Type.NUMBER }, lineItems: {
-                            type: Type.ARRAY, items: {
-                                type: Type.OBJECT, properties: {
-                                    description: { type: Type.STRING }, amount: { type: Type.NUMBER }, category: { type: Type.STRING, enum: categories },
+                    type: 'OBJECT', properties: {
+                        vendor: { type: 'STRING' }, date: { type: 'STRING', description: 'YYYY-MM-DD' },
+                        total: { type: 'NUMBER' }, tax: { type: 'NUMBER' }, lineItems: {
+                            type: 'ARRAY', items: {
+                                type: 'OBJECT', properties: {
+                                    description: { type: 'STRING' }, amount: { type: 'NUMBER' }, category: { type: 'STRING', enum: categories },
                                 }, required: ['description', 'amount', 'category']
                             }
                         }
@@ -123,14 +123,30 @@ const ExpensesView: React.FC = () => {
                     text: `Extract expense details from this receipt and format the response as a valid JSON object. Do not include markdown formatting like \`\`\`json. The JSON object must match this schema: ${JSON.stringify(jsonSchema)}`
                 };
 
-                const response = await ai.models.generateContent({
-                    model: "gemini-2.5-flash",
-                    contents: { parts: [textPart, receiptPart] },
-                    config: { responseMimeType: 'application/json' },
+                const proxyResponse = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: "gemini-2.5-flash",
+                        contents: { parts: [textPart, receiptPart] },
+                        config: { responseMimeType: 'application/json' },
+                    })
                 });
+
+                if (!proxyResponse.ok) {
+                    const errorData = await proxyResponse.json();
+                    throw new Error(errorData.error.message || `API request failed with status ${proxyResponse.status}`);
+                }
+                
+                const response = await proxyResponse.json();
+                const responseText = response.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (!responseText) {
+                    throw new Error("Received an empty response from the AI.");
+                }
                 
                 try {
-                    const data = JSON.parse(response.text.trim());
+                    const data = JSON.parse(responseText.trim());
                     newExpenses.push({
                         id: generateId(), vendor: data.vendor || 'Unknown', date: data.date || new Date().toISOString().split('T')[0],
                         total: data.total || 0, tax: data.tax || 0,
@@ -139,7 +155,7 @@ const ExpensesView: React.FC = () => {
                     });
                     existingHashes.add(fileHash);
                 } catch (jsonParseError: any) {
-                    setErrors(prev => [...prev, `Failed to parse JSON for ${file.name}. AI Response: ${response.text}`]);
+                    setErrors(prev => [...prev, `Failed to parse JSON for ${file.name}. AI Response: ${responseText}`]);
                     continue;
                 }
             } catch (err: any) { setErrors(prev => [...prev, `Error processing ${file.name}: ${err.message}`]); }

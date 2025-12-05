@@ -1,5 +1,5 @@
 import React from 'react';
-import { RouteStop, RouteMetrics } from '../types.ts';
+import { RouteStop, RouteMetrics, HomeStopData, JobStopData, Supplier } from '../types.ts';
 import { HomeIcon, UserCircleIcon, BuildingStorefrontIcon, MapPinIcon, PlusIcon, ClockIcon, TrashIcon, RefreshIcon } from './icons.tsx';
 import { formatTime } from '../utils.ts';
 
@@ -19,9 +19,10 @@ interface RouteSidebarProps {
 }
 
 const getStopName = (stop: RouteStop) => {
-    if (stop.type === 'home') return stop.data.label === 'Start' ? 'Start From Home' : 'Return Home';
-    if (stop.type === 'job') return stop.data.contactName;
-    return stop.data.name;
+    // FIX: Add explicit type casts to resolve TypeScript errors when accessing properties on the 'StopData' union type.
+    if (stop.type === 'home') return (stop.data as HomeStopData).label === 'Start' ? 'Start From Home' : 'Return Home';
+    if (stop.type === 'job') return (stop.data as JobStopData).contactName;
+    return (stop.data as Supplier).name;
 };
 
 const getStopIcon = (stop: RouteStop): { Icon: React.FC<any>, classes: string, bg: string } => {
@@ -105,7 +106,8 @@ const RouteSidebar: React.FC<RouteSidebarProps> = ({
                             )}
                             <li>
                                 <div 
-                                    onClick={stop.type === 'job' ? () => onViewJobDetail(stop.data.contactId, stop.data.id.split('-')[0]) : undefined}
+                                    // FIX: Add explicit type casts to resolve TypeScript errors when accessing properties on the 'StopData' union type.
+                                    onClick={stop.type === 'job' ? () => onViewJobDetail((stop.data as JobStopData).contactId, (stop.data as JobStopData).id.split('-')[0]) : undefined}
                                     className={`p-3 rounded-lg flex items-start space-x-3 ${stop.type === 'job' ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors' : ''}`}
                                 >
                                     <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${bg}`}>
@@ -116,8 +118,9 @@ const RouteSidebar: React.FC<RouteSidebarProps> = ({
                                          <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{stop.data.address}</p>
 
                                         <div className="flex items-center flex-wrap gap-2 mt-1">
-                                            {stop.type === 'job' && stop.data.time && (
-                                                <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">Apt: {formatTime(stop.data.time)}</p>
+                                            {/* FIX: Add explicit type casts to resolve TypeScript errors when accessing properties on the 'StopData' union type. */}
+                                            {stop.type === 'job' && (stop.data as JobStopData).time && (
+                                                <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">Apt: {formatTime((stop.data as JobStopData).time)}</p>
                                             )}
                                             {metrics && (
                                                 <p className="text-xs font-semibold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-900/50 px-2 py-0.5 rounded-full">ETA: {metrics.eta}</p>
@@ -125,7 +128,8 @@ const RouteSidebar: React.FC<RouteSidebarProps> = ({
                                         </div>
                                     </div>
                                     <div className="w-10 flex-shrink-0 flex flex-col items-center justify-center space-y-2">
-                                        {(stop.type !== 'home' || stop.data.label === 'End') && (
+                                        {/* FIX: Add explicit type casts to resolve TypeScript errors when accessing properties on the 'StopData' union type. */}
+                                        {(stop.type !== 'home' || (stop.data as HomeStopData).label === 'End') && (
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();

@@ -63,14 +63,8 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ contactId, ticketId, from, on
     }
 
     const normalizedInspections = useMemo<SafetyInspection[]>(() => {
-        if (ticket.inspections && ticket.inspections.length > 0) {
-            return ticket.inspections;
-        }
-        if (ticket.inspection && ticket.inspection.length > 0) {
-            return [{ id: 'migrated_inspection', name: 'Safety Inspection', items: ticket.inspection }];
-        }
-        return [];
-    }, [ticket.inspections, ticket.inspection]);
+        return ticket.inspections || [];
+    }, [ticket.inspections]);
     
     const hasInspectionResults = normalizedInspections.some(inspection =>
         inspection.items.some(i => ['Pass', 'Fail', 'Repaired'].includes(i.status || 'N/A'))

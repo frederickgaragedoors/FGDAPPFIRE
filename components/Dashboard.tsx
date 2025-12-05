@@ -3,7 +3,7 @@ import { JobTicket, jobStatusColors, JobStatus, paymentStatusColors, paymentStat
 import { useContacts } from '../contexts/ContactContext.tsx';
 import EmptyState from './EmptyState.tsx';
 import { ClipboardListIcon } from './icons.tsx';
-import { formatTime, getLocalDateString } from '../utils.ts';
+import { formatTime, getLocalDateString, getLatestJobStatus, getAppointmentDetailsForDate } from '../utils.ts';
 
 interface DashboardProps {
     onViewJobDetail: (contactId: string, ticketId: string) => void;
@@ -36,56 +36,23 @@ const Dashboard: React.FC<DashboardProps> = ({ onViewJobDetail }) => {
     const allJobs = useMemo<JobWithContact[]>(() => {
         return (contacts || []).flatMap(contact => 
             (contact.jobTickets || []).map((ticket): JobWithContact | null => {
-                // FIX: This commit resolves multiple TypeScript errors by updating the component to derive job status from the `statusHistory` array, aligning with the refactored data model. It introduces a `JobWithContact` type with a `status` property, fixes fallback logic for jobs without a full history, and correctly determines a job's effective time. Additionally, the status sorting order now includes 'Job Created' to prevent runtime errors.
-                const history = ticket.statusHistory && ticket.statusHistory.length > 0
-                    ? [...ticket.statusHistory].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-                    : (ticket.createdAt ? [{ status: 'Job Created' as JobStatus, timestamp: ticket.createdAt, id: 'fallback' }] as StatusHistoryEntry[] : []);
-                
-                if (history.length === 0) return null;
-                
-                const latestStatusEntry = history[0];
-                const timestamp = latestStatusEntry.timestamp;
-                const hasTimeInLatestStatus = timestamp.includes('T');
-                
-                const displayDate = hasTimeInLatestStatus ? new Date(timestamp) : new Date(`${timestamp}T00:00:00`);
-                
-                // Normalize date part for filtering based on local date
+                const latestStatusEntry = getLatestJobStatus(ticket);
+                if (!latestStatusEntry) return null;
+
+                const effectiveDateString = getLocalDateString(new Date(latestStatusEntry.timestamp));
+                const appointmentDetails = getAppointmentDetailsForDate(ticket, effectiveDateString);
+
+                const displayDate = new Date(latestStatusEntry.timestamp);
                 const effectiveDate = new Date(displayDate.getFullYear(), displayDate.getMonth(), displayDate.getDate());
-                const effectiveDateString = getLocalDateString(effectiveDate);
-
-                // Find the most recent "scheduling" status *on the job's effective day* to act as the appointment time.
-                const scheduledEntry = history.find(h => 
-                    (h.status === 'Scheduled' || h.status === 'Estimate Scheduled') &&
-                    getLocalDateString(new Date(h.timestamp)) === effectiveDateString
-                );
-
-                // FIX: This commit resolves multiple TypeScript errors by updating the component to derive job status from the `statusHistory` array, aligning with the refactored data model. It introduces a `JobWithContact` type with a `status` property, fixes fallback logic for jobs without a full history, and correctly determines a job's effective time. Additionally, the status sorting order now includes 'Job Created' to prevent runtime errors.
-                let effectiveTime: string | undefined;
-
-                if (scheduledEntry && scheduledEntry.timestamp.includes('T')) {
-                    // Use the time from that specific scheduled status entry, converting to local time.
-                    const d = new Date(scheduledEntry.timestamp);
-                    const hours = String(d.getHours()).padStart(2, '0');
-                    const minutes = String(d.getMinutes()).padStart(2, '0');
-                    effectiveTime = `${hours}:${minutes}`;
-                } else {
-                    const latestEntryWithTime = history.find(h => h.timestamp.includes('T'));
-                    if (latestEntryWithTime) {
-                        const d = new Date(latestEntryWithTime.timestamp);
-                        const hours = String(d.getHours()).padStart(2, '0');
-                        const minutes = String(d.getMinutes()).padStart(2, '0');
-                        effectiveTime = `${hours}:${minutes}`;
-                    }
-                }
 
                 return {
                     ...ticket,
                     status: latestStatusEntry.status,
                     contactId: contact.id,
                     contactName: contact.name,
-                    effectiveDate, // The normalized date for filtering
-                    displayDate, // The full date object for display
-                    effectiveTime,
+                    effectiveDate,
+                    displayDate,
+                    effectiveTime: appointmentDetails?.time,
                 };
             }).filter((job): job is JobWithContact => job !== null)
         );

@@ -31,6 +31,7 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onCancel, ini
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [doorProfiles, setDoorProfiles] = useState<DoorProfile[]>([]);
   const [stagedFiles, setStagedFiles] = useState<FileAttachment[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
   
   const addressInputRef = useRef<HTMLInputElement>(null);
   const { isLoaded: isMapsLoaded, error: mapsError } = useGoogleMaps(apiKey);
@@ -50,27 +51,17 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onCancel, ini
     setStagedFiles([]);
     newFileObjects.current = {};
 
-    if (initialContact?.doorProfiles) {
+    if (initialContact?.doorProfiles && initialContact.doorProfiles.length > 0) {
         setDoorProfiles(initialContact.doorProfiles.map(p => ({
             ...p,
-            doorInstallDate: p.doorInstallDate || (p as any).installDate || 'Unknown',
-            springInstallDate: p.springInstallDate || (p as any).installDate || 'Unknown',
-            openerInstallDate: p.openerInstallDate || (p as any).installDate || 'Unknown',
-            springs: p.springs || (p.springSize ? [{ id: generateId(), size: p.springSize }] : [{ id: generateId(), size: '' }])
+            doorInstallDate: p.doorInstallDate || 'Unknown',
+            springInstallDate: p.springInstallDate || 'Unknown',
+            openerInstallDate: p.openerInstallDate || 'Unknown',
+            springs: p.springs && p.springs.length > 0 ? p.springs : [{ id: generateId(), size: '' }]
         })));
-    } else if ((initialContact as any)?.doorProfile) {
-        const oldP = (initialContact as any).doorProfile;
-        setDoorProfiles([{ 
-            ...oldP, 
-            id: generateId(),
-            doorInstallDate: oldP.installDate || 'Unknown',
-            springInstallDate: oldP.installDate || 'Unknown',
-            openerInstallDate: oldP.installDate || 'Unknown',
-            springs: [{ id: generateId(), size: oldP.springSize || '' }]
-        }]);
     } else {
         setDoorProfiles([{
-            id: generateId(), dimensions: '', doorType: '', springSystem: '', springSize: '',
+            id: generateId(), dimensions: '', doorType: '', springSystem: '',
             springs: [{ id: generateId(), size: '' }], openerBrand: '', openerModel: '',
             doorInstallDate: 'Unknown', springInstallDate: 'Unknown', openerInstallDate: 'Unknown'
         }]);
@@ -195,7 +186,6 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onCancel, ini
         dimensions: '',
         doorType: '',
         springSystem: '',
-        springSize: '',
         springs: [{ id: generateId(), size: '' }],
         openerBrand: '',
         openerModel: '',
@@ -211,11 +201,11 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onCancel, ini
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSaving(true);
     const finalFiles = [...files, ...stagedFiles];
     
     let initialJobTickets: JobTicket[] = initialContact?.jobTickets || [];
     
-    // FIX: Updated the creation of initial job tickets to use the `statusHistory` array instead of the deprecated `date` and `status` properties. This ensures new contacts created with a scheduled job conform to the current data model, preventing downstream errors and maintaining data consistency.
     if (initialJobDate && !initialContact) {
         const actualDate = initialJobDate.split('_')[0];
         const createdAt = new Date().toISOString();
@@ -229,6 +219,7 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onCancel, ini
         initialJobTickets = [{
             id: generateId(),
             createdAt: createdAt,
+            jobLocation: address,
             statusHistory: statusHistory,
             notes: '',
             parts: [],
@@ -238,7 +229,6 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onCancel, ini
 
     const processedProfiles = doorProfiles.map(p => ({
         ...p,
-        springSize: p.springs && p.springs.length > 0 ? p.springs[0].size : ''
     }));
 
     const finalDoorProfiles = processedProfiles.filter(p => 
@@ -258,8 +248,14 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onCancel, ini
     };
 
     const contactId = initialContact ? initialContact.id : undefined;
-    handleSaveContact({id: contactId, ...contactData}, newFileObjects.current);
-    newFileObjects.current = {};
+    handleSaveContact({id: contactId, ...contactData}, newFileObjects.current)
+        .catch(() => {
+            // Error is handled by notification in context, just reset loading state
+        })
+        .finally(() => {
+            setIsSaving(false);
+            newFileObjects.current = {};
+        });
   };
 
   const inputClass = "mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm dark:text-white";
@@ -313,7 +309,13 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onCancel, ini
         </h2>
         <div className="flex space-x-2">
             <button type="button" onClick={onCancel} className="hidden md:inline px-4 py-2 rounded-md text-sm font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">Cancel</button>
-            <button type="submit" className="px-4 py-2 rounded-md text-sm font-medium text-white bg-sky-500 hover:bg-sky-600 transition-colors">Save</button>
+            <button 
+                type="submit" 
+                disabled={isSaving}
+                className="px-4 py-2 rounded-md text-sm font-medium text-white bg-sky-500 hover:bg-sky-600 transition-colors disabled:bg-sky-300 dark:disabled:bg-sky-800 disabled:cursor-wait w-24 text-center"
+            >
+                {isSaving ? 'Saving...' : 'Save'}
+            </button>
         </div>
       </div>
       
@@ -373,15 +375,16 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onCancel, ini
                                 id="address" 
                                 value={address} 
                                 onChange={e => setAddress(e.target.value)} 
-                                onKeyDown={e => { if(e.key === 'Enter') e.preventDefault(); }}
                                 placeholder=""
                                 className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm dark:text-white"
                                 autoComplete="off"
                             />
                             {mapsError && (
-                                <p className="mt-1 text-xs text-red-600 dark:text-red-400">
-                                    Address autocomplete unavailable: {mapsError.message}
-                                </p>
+                                <div className="mt-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-md text-xs text-amber-700 dark:text-amber-300">
+                                    <p className="font-semibold">Map Service Error</p>
+                                    <p>Address autocomplete is unavailable. Please check your API Key in <span className="font-bold">Settings &gt; Map & Route Settings</span>.</p>
+                                    <p className="mt-1 opacity-70">Details: {mapsError.message}</p>
+                                </div>
                             )}
                         </div>
                     </div>
