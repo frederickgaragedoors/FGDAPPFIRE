@@ -1,4 +1,4 @@
-import { JobTicket, Contact, StatusHistoryEntry } from './types.ts';
+import { JobTicket, Contact, StatusHistoryEntry, DoorProfile, SafetyInspection, JobStatus, QuoteOption } from './types.ts';
 
 /**
  * Generates a short, secure uppercase alphanumeric ID.
@@ -89,6 +89,33 @@ export const calculateJobTicketTotal = (ticket: Partial<JobTicket> | null) => {
 };
 
 /**
+ * Calculates totals for a single quote option.
+ * @param option The QuoteOption object.
+ * @param salesTaxRate The sales tax rate for the parent quote.
+ * @param processingFeeRate The card fee rate for the parent quote.
+ * @returns An object with the detailed cost breakdown for one option.
+ */
+export const calculateQuoteOptionTotal = (option: Partial<QuoteOption> | null, salesTaxRate: number, processingFeeRate: number) => {
+    if (!option) {
+        return { subtotal: 0, taxAmount: 0, feeAmount: 0, totalCost: 0, cashTotal: 0 };
+    }
+    const partsTotal = (option.parts || []).reduce((sum, part) => sum + (Number(part.cost || 0) * Number(part.quantity || 1)), 0);
+    const subtotal = partsTotal + Number(option.laborCost || 0);
+    const taxAmount = subtotal * (salesTaxRate / 100);
+    const cashTotal = subtotal + taxAmount;
+    const feeAmount = cashTotal * (processingFeeRate / 100);
+    const totalCost = cashTotal + feeAmount; // This is the card total
+    
+    return {
+        subtotal,
+        taxAmount,
+        feeAmount,
+        totalCost,
+        cashTotal
+    };
+};
+
+/**
  * Formats a 24h time string (HH:MM) to 12h format with AM/PM.
  */
 export const formatTime = (time: string): string => {
@@ -128,8 +155,6 @@ export const saveJsonFile = async (data: object, filename: string): Promise<void
     const jsonString = JSON.stringify(data, null, 2);
     const blob = new Blob([jsonString], { type: 'application/json' });
 
-    // Use the File System Access API if available
-    // Check if we are in a secure context and not in a cross-origin iframe which might block this API
     if ('showSaveFilePicker' in window) {
         try {
             const handle = await (window as any).showSaveFilePicker({
@@ -144,19 +169,16 @@ export const saveJsonFile = async (data: object, filename: string): Promise<void
             const writable = await handle.createWritable();
             await writable.write(blob);
             await writable.close();
-            return; // Success
+            return;
         } catch (err: any) {
-            // AbortError is thrown when the user cancels the save dialog.
             if (err.name === 'AbortError') {
                 console.log('User cancelled save dialog.');
                 return;
             }
-            // Handle SecurityError (cross-origin frames) or other errors gracefully
             console.warn('File System Access API skipped (fallback to download):', err.message);
         }
     }
 
-    // Fallback for browsers that don't support the API or failed due to security context
     downloadJsonFile(data, filename);
 };
 
@@ -176,7 +198,6 @@ export const generateICSContent = (contacts: Contact[]): string => {
             ticket.statusHistory.forEach((entry: StatusHistoryEntry) => {
                 if (entry.status === 'Scheduled' || entry.status === 'Estimate Scheduled') {
                     const isAllDay = !entry.timestamp.includes('T');
-                    // Use replace to ensure date-only strings ('YYYY-MM-DD') are parsed as local time midnight, not UTC midnight.
                     const startDate = isAllDay ? new Date(entry.timestamp.replace(/-/g, '/')) : new Date(entry.timestamp);
                     
                     icsContent += "BEGIN:VEVENT\n";
@@ -264,7 +285,6 @@ export const loadGoogleMapsScript = (apiKey: string): Promise<void> => {
 
   const scriptId = 'google-maps-script';
   
-  // If a script exists and the key is different, we need to reload.
   const existingScript = document.getElementById(scriptId) as HTMLScriptElement;
   if (existingScript && !existingScript.src.includes(`key=${apiKey}`)) {
       existingScript.remove();
@@ -273,19 +293,16 @@ export const loadGoogleMapsScript = (apiKey: string): Promise<void> => {
       loadedApiKey = null;
   }
   
-  // If already loaded/loading with the correct key, return the existing promise.
   if (googleMapsPromise && loadedApiKey === apiKey) {
     return googleMapsPromise;
   }
 
-  // If google object is already there with correct key, resolve immediately.
   if ((window as any).google && loadedApiKey === apiKey) {
     return Promise.resolve();
   }
 
   loadedApiKey = apiKey;
   googleMapsPromise = new Promise((resolve, reject) => {
-    // Cleanup previous auth failure handler if it exists
     if ((window as any).gm_authFailure) {
         delete (window as any).gm_authFailure;
     }
@@ -373,4 +390,114 @@ export const exportToCsv = (data: Record<string, any>[], filename: string): void
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+};
+
+/**
+ * Runs a one-time migration on contact data to convert legacy fields to the current format.
+ * @param contacts - The array of contacts to process.
+ * @returns An object containing the migrated contacts and a flag indicating if any changes were made.
+ */
+export const migrateContacts = (contacts: Contact[]): { migratedContacts: Contact[], wasMigrated: boolean } => {
+  let wasMigrated = false;
+
+  const migratedContacts = contacts.map(c => {
+    let contactModified = false;
+    const newContact = { ...c };
+
+    if ((newContact as any).doorProfile) {
+      if (!newContact.doorProfiles) newContact.doorProfiles = [];
+      const legacyProfile = (newContact as any).doorProfile as DoorProfile;
+      if (!newContact.doorProfiles.some(p => p.id === legacyProfile.id)) {
+        newContact.doorProfiles.push(legacyProfile);
+      }
+      delete (newContact as any).doorProfile;
+      contactModified = true;
+    }
+
+    if (newContact.doorProfiles) {
+      newContact.doorProfiles = newContact.doorProfiles.map(profile => {
+        const p = profile as any;
+        if (p.springSize && (!p.springs || p.springs.length === 0)) {
+          contactModified = true;
+          const newProfile = { ...p };
+          newProfile.springs = [{ id: generateId(), size: p.springSize }];
+          delete newProfile.springSize;
+          return newProfile as DoorProfile;
+        }
+        return profile;
+      });
+    }
+
+    if (newContact.jobTickets) {
+      newContact.jobTickets = newContact.jobTickets.map(ticket => {
+        const t = ticket as any;
+        if (t.inspection && (!t.inspections || t.inspections.length === 0)) {
+          contactModified = true;
+          const newTicket = { ...t };
+          newTicket.inspections = [{ id: generateId(), name: 'Safety Inspection', items: t.inspection }] as SafetyInspection[];
+          delete newTicket.inspection;
+          return newTicket as JobTicket;
+        }
+        return ticket;
+      });
+    }
+
+    if (contactModified) {
+      wasMigrated = true;
+      newContact.lastModified = new Date().toISOString();
+    }
+    
+    return newContact;
+  });
+
+  return { migratedContacts, wasMigrated };
+};
+
+
+/**
+ * Finds the latest status entry for a job ticket.
+ * @param ticket The JobTicket object.
+ * @returns The most recent StatusHistoryEntry, or a fallback if none exist.
+ */
+export const getLatestJobStatus = (ticket: JobTicket): StatusHistoryEntry | null => {
+    const history = (ticket.statusHistory && ticket.statusHistory.length > 0)
+        ? [...ticket.statusHistory].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        : (ticket.createdAt ? [{ status: 'Job Created' as JobStatus, timestamp: ticket.createdAt, id: 'fallback' }] as StatusHistoryEntry[] : []);
+    
+    return history[0] || null;
+};
+
+/**
+ * Finds the appointment time and effective date for a job on a specific day.
+ * @param ticket The JobTicket object.
+ * @param dateString The target date in 'YYYY-MM-DD' format.
+ * @returns An object with the appointment time and date, or null if no relevant activity is found.
+ */
+export const getAppointmentDetailsForDate = (ticket: JobTicket, dateString: string): { time?: string, date: Date } | null => {
+    const history = ticket.statusHistory || [];
+    const routableStatuses: JobStatus[] = ['Scheduled', 'Estimate Scheduled', 'In Progress', 'Supplier Run', 'Completed'];
+
+    const wasActiveOnDate = history.some(entry => 
+        routableStatuses.includes(entry.status) &&
+        getLocalDateString(new Date(entry.timestamp)) === dateString
+    );
+
+    if (!wasActiveOnDate) {
+        return null;
+    }
+    
+    const scheduledEntry = history
+        .filter(h => 
+            (h.status === 'Scheduled' || h.status === 'Estimate Scheduled') &&
+            getLocalDateString(new Date(h.timestamp)) === dateString
+        )
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
+
+    let time: string | undefined;
+    if (scheduledEntry && scheduledEntry.timestamp.includes('T')) {
+        const d = new Date(scheduledEntry.timestamp);
+        time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    }
+
+    return { time, date: new Date(`${dateString}T00:00:00`) };
 };

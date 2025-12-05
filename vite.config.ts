@@ -1,7 +1,7 @@
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
-import { VitePWA } from 'vite-plugin-pwa'; // UNCOMMENT FOR PWA DEPLOYMENT
+// import { VitePWA } from 'vite-plugin-pwa'; // UNCOMMENT FOR PWA DEPLOYMENT
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
@@ -19,14 +19,14 @@ export default defineConfig(({ mode }) => {
         emptyOutDir: true,
         rollupOptions: {
           external: [
-            '@google/genai',
+            // No longer needed on the client, will be handled by proxy
           ],
         },
       },
       plugins: [
         react(),
         // UNCOMMENT THE SECTION BELOW TO ENABLE PWA (Offline Support)
-        
+        /*
         VitePWA({
           registerType: 'autoUpdate',
           includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
@@ -45,14 +45,11 @@ export default defineConfig(({ mode }) => {
             ]
           }
         })
-        
+        */
       ],
       define: {
-        // Use || '' to ensure it returns a string even if the env var is undefined during build
-        // We only define process.env.API_KEY manually for the Gemini SDK compatibility.
         // VITE_ variables are automatically handled by import.meta.env.
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY || ''),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || ''),
+        // The Gemini API key is no longer exposed to the client.
       },
       resolve: {
         alias: {

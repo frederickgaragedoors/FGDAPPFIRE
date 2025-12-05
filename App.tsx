@@ -16,9 +16,12 @@ import RouteView from './components/RouteView.tsx';
 import ExpensesView from './components/ExpensesView.tsx';
 import ReportsView from './components/ReportsView.tsx';
 import MileageView from './components/MileageView.tsx';
+import SocialView from './components/SocialView.tsx';
 import Login from './components/Login.tsx';
 import LoadingOverlay from './components/LoadingOverlay.tsx';
 import EmptyState from './components/EmptyState.tsx';
+import QuoteBuilderModal from './components/QuoteBuilderModal.tsx';
+import QuoteView from './components/QuoteView.tsx';
 import { SettingsIcon, UsersIcon } from './components/icons.tsx';
 import { AppProvider, useApp } from './contexts/AppContext.tsx';
 import { NavigationProvider, useNavigation } from './contexts/NavigationContext.tsx';
@@ -42,14 +45,18 @@ const AppContent: React.FC = () => {
 
     const [newContactFormKey, setNewContactFormKey] = useState(Date.now());
 
-    const fullScreenViews: ViewState['type'][] = ['dashboard', 'calendar', 'route', 'expenses', 'reports', 'mileage', 'settings'];
+    const fullScreenViews: ViewState['type'][] = ['dashboard', 'calendar', 'route', 'expenses', 'reports', 'mileage', 'settings', 'social'];
     const isFullScreenView = fullScreenViews.includes(viewState.type);
 
     const selectedContactId = useMemo(() => {
-        if (viewState.type === 'detail' || viewState.type === 'edit_form') {
-            return viewState.id;
-        }
-        if (viewState.type === 'invoice' || viewState.type === 'job_detail') {
+        if (
+            viewState.type === 'detail' || 
+            viewState.type === 'edit_form' || 
+            viewState.type === 'invoice' || 
+            viewState.type === 'job_detail' || 
+            viewState.type === 'quote_form' || 
+            viewState.type === 'quote_view'
+        ) {
             return viewState.contactId;
         }
         return null;
@@ -71,6 +78,7 @@ const AppContent: React.FC = () => {
             case 'expenses': return <ExpensesView />;
             case 'reports': return <ReportsView />;
             case 'mileage': return <MileageView />;
+            case 'social': return <SocialView />;
             case 'list': 
                  return (
                     <div className="hidden md:flex h-full w-full items-center justify-center bg-slate-50 dark:bg-slate-900">
@@ -83,17 +91,23 @@ const AppContent: React.FC = () => {
                 );
             case 'detail':
                 if (!selectedContact) return <div className="p-4">Contact not found</div>;
-                return <ContactDetail key={selectedContact.id} contact={selectedContact} onEdit={() => setViewState({ type: 'edit_form', id: selectedContact.id })} onClose={() => setViewState({ type: 'list' })} onViewInvoice={(contactId, ticketId) => setViewState({ type: 'invoice', contactId, ticketId, from: 'contact_detail' })} onViewJobDetail={(contactId, ticketId) => setViewState({ type: 'job_detail', contactId, ticketId })} initialJobDate={viewState.initialJobDate} openJobId={viewState.openJobId} />;
+                return <ContactDetail key={selectedContact.id} contact={selectedContact} onEdit={() => setViewState({ type: 'edit_form', contactId: selectedContact.id })} onClose={() => setViewState({ type: 'list' })} onViewInvoice={(contactId, ticketId) => setViewState({ type: 'invoice', contactId, ticketId, from: 'contact_detail' })} onViewJobDetail={(contactId, ticketId) => setViewState({ type: 'job_detail', contactId, ticketId })} initialJobDate={viewState.initialJobDate} openJobId={viewState.openJobId} />;
             case 'new_form': return <ContactForm key={newContactFormKey} onCancel={() => setViewState({ type: 'list' })} initialJobDate={viewState.initialJobDate} />;
             case 'edit_form':
                 if (!selectedContact) return <div className="p-4">Contact not found</div>;
-                return <ContactForm key={selectedContact.id} initialContact={selectedContact} onCancel={() => setViewState({ type: 'detail', id: selectedContact.id })} />;
+                return <ContactForm key={selectedContact.id} initialContact={selectedContact} onCancel={() => setViewState({ type: 'detail', contactId: selectedContact.id })} />;
             case 'settings': 
                 return <Settings onBack={() => setViewState({ type: 'dashboard' })} />;
             case 'invoice':
-                return <InvoiceView contactId={viewState.contactId} ticketId={viewState.ticketId} from={viewState.from} onClose={() => setViewState(viewState.from === 'contact_detail' ? { type: 'detail', id: viewState.contactId } : { type: 'job_detail', contactId: viewState.contactId, ticketId: viewState.ticketId })} />;
+                return <InvoiceView contactId={viewState.contactId} ticketId={viewState.ticketId} from={viewState.from} onClose={() => setViewState(viewState.from === 'contact_detail' ? { type: 'detail', contactId: viewState.contactId } : { type: 'job_detail', contactId: viewState.contactId, ticketId: viewState.ticketId })} />;
             case 'job_detail':
-                return <JobDetailView contactId={viewState.contactId} ticketId={viewState.ticketId} onBack={() => setViewState({ type: 'detail', id: viewState.contactId })} onViewInvoice={() => setViewState({ type: 'invoice', contactId: viewState.contactId, ticketId: viewState.ticketId, from: 'job_detail' })} onViewRouteForDate={(date) => setViewState({ type: 'route', initialDate: date })} />;
+                return <JobDetailView contactId={viewState.contactId} ticketId={viewState.ticketId} onBack={() => setViewState({ type: 'detail', contactId: viewState.contactId })} onViewInvoice={() => setViewState({ type: 'invoice', contactId: viewState.contactId, ticketId: viewState.ticketId, from: 'job_detail' })} onViewRouteForDate={(date) => setViewState({ type: 'route', initialDate: date })} />;
+            case 'quote_form':
+                if (!selectedContact) return <div className="p-4">Contact not found</div>;
+                 return <QuoteBuilderModal contact={selectedContact} quoteId={viewState.quoteId} onClose={() => setViewState({ type: 'detail', contactId: selectedContact.id })} />;
+            case 'quote_view':
+                if (!selectedContact) return <div className="p-4">Contact not found</div>;
+                return <QuoteView contactId={viewState.contactId} quoteId={viewState.quoteId} onClose={() => setViewState({ type: 'detail', contactId: viewState.contactId })} />;
             default: return <Dashboard onViewJobDetail={(contactId, ticketId) => setViewState({ type: 'job_detail', contactId, ticketId })} />;
         }
     };
@@ -110,12 +124,13 @@ const AppContent: React.FC = () => {
             onGoToExpenses={() => setViewState({ type: 'expenses' })}
             onGoToReports={() => setViewState({ type: 'reports' })}
             onGoToMileage={() => setViewState({ type: 'mileage' })}
+            onGoToSocial={() => setViewState({ type: 'social' })}
         />
     );
      const modal = contactSelectorDate && (
         <ContactSelectorModal 
             onSelect={(contactId) => { 
-                setViewState({ type: 'detail', id: contactId, initialJobDate: createDateTrigger(contactSelectorDate.toISOString().split('T')[0]) }); 
+                setViewState({ type: 'detail', contactId: contactId, initialJobDate: createDateTrigger(contactSelectorDate.toISOString().split('T')[0]) }); 
                 setContactSelectorDate(null); 
             }} 
             onNewContact={() => { 
@@ -153,8 +168,8 @@ const AppContent: React.FC = () => {
                 `}>
                     <ContactList
                         selectedContactId={selectedContactId}
-                        onSelectContact={(id) => setViewState({ type: 'detail', id })}
-                        onAddJob={(contactId) => setViewState({ type: 'detail', id: contactId, initialJobDate: createDateTrigger(new Date().toISOString().split('T')[0]) })}
+                        onSelectContact={(contactId) => setViewState({ type: 'detail', contactId })}
+                        onAddJob={(contactId) => setViewState({ type: 'detail', contactId: contactId, initialJobDate: createDateTrigger(new Date().toISOString().split('T')[0]) })}
                     />
                 </div>
                 <div className={`
