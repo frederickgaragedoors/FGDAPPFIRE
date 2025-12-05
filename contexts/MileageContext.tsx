@@ -44,38 +44,22 @@ export const MileageProvider: React.FC<{ children: ReactNode }> = ({ children })
         return () => { unsubMileage(); };
     }, [user, isGuestMode]);
 
-    const persistLogs = async (logs: Mileage[]) => {
-        if (isGuestMode) {
-            await idb.saveMileageLogs(logs);
-        } else if (user && db) {
-            const batch = writeBatch(db);
-            const collRef = collection(db, 'users', user.uid, 'mileageLogs');
-            
-            const existingDocs = await getDocs(collRef);
-            existingDocs.forEach(d => batch.delete(d.ref));
-
-            logs.forEach(item => batch.set(doc(collRef, item.id), item));
-            await batch.commit();
-        }
-    };
-
     const handleSaveMileageLog = async (log: Mileage) => {
         const index = mileageLogs.findIndex(l => l.id === log.id);
         const updatedLogs = index > -1 ? mileageLogs.map((l, i) => i === index ? log : l) : [...mileageLogs, log];
         setMileageLogs(updatedLogs);
         
         if (isGuestMode) {
-            await idb.saveMileageLogs(updatedLogs);
+            await idb.putItem(idb.MILEAGE_LOGS_STORE, log);
         } else if (user && db) {
             await setDoc(doc(db, 'users', user.uid, 'mileageLogs', log.id), log, { merge: true });
         }
     };
 
     const handleDeleteMileageLog = async (logId: string) => {
-        const updatedLogs = mileageLogs.filter(l => l.id !== logId);
-        setMileageLogs(updatedLogs);
+        setMileageLogs(prev => prev.filter(l => l.id !== logId));
         if (isGuestMode) {
-            await idb.saveMileageLogs(updatedLogs);
+            await idb.deleteItem(idb.MILEAGE_LOGS_STORE, logId);
         } else if (user && db) {
             await deleteDoc(doc(db, 'users', user.uid, 'mileageLogs', logId));
         }
@@ -186,7 +170,16 @@ export const MileageProvider: React.FC<{ children: ReactNode }> = ({ children })
         if (newLogs.length > 0 || logsToDeleteIds.length > 0) {
             const finalLogs = mileageLogs.filter(log => !logsToDeleteIds.includes(log.id)).concat(newLogs);
             setMileageLogs(finalLogs);
-            await persistLogs(finalLogs);
+
+            if (isGuestMode) {
+                await idb.putItems(idb.MILEAGE_LOGS_STORE, newLogs);
+                await idb.deleteItems(idb.MILEAGE_LOGS_STORE, logsToDeleteIds);
+            } else if (user && db) {
+                const batch = writeBatch(db);
+                newLogs.forEach(log => batch.set(doc(db, 'users', user.uid, 'mileageLogs', log.id), log));
+                logsToDeleteIds.forEach(id => batch.delete(doc(db, 'users', user.uid, 'mileageLogs', id)));
+                await batch.commit();
+            }
         }
 
         const lastMileageSync = settings.lastMileageSync || {};
@@ -204,7 +197,8 @@ export const MileageProvider: React.FC<{ children: ReactNode }> = ({ children })
     const restoreMileageLogs = async (logs: Mileage[]) => {
         setMileageLogs(logs);
          if (isGuestMode) {
-            await idb.saveMileageLogs(logs);
+            await idb.clearStore(idb.MILEAGE_LOGS_STORE);
+            await idb.putItems(idb.MILEAGE_LOGS_STORE, logs);
         } else if (user && db) {
             const collRef = collection(db, 'users', user.uid, 'mileageLogs');
             const snapshot = await getDocs(collRef);

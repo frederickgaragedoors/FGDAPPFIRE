@@ -1,9 +1,9 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { db, storage } from '../firebase.ts';
 import { collection, doc, onSnapshot, setDoc, deleteDoc, updateDoc, writeBatch, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
-import { Contact, JobTicket, FileAttachment } from '../types.ts';
-import { generateId } from '../utils.ts';
+import { Contact, JobTicket, FileAttachment, Quote } from '../types.ts';
+import { generateId, migrateContacts } from '../utils.ts';
 import * as idb from '../db.ts';
 import { useNotifications } from './NotificationContext.tsx';
 import { useApp } from './AppContext.tsx';
@@ -17,6 +17,8 @@ interface ContactContextType {
     handleAddFilesToContact: (contactId: string, newFiles: FileAttachment[], newFileObjects: { [id: string]: File }) => Promise<void>;
     handleUpdateContactJobTickets: (contactId: string, ticketDataOrArray: (Omit<JobTicket, "id"> & { id?: string }) | JobTicket[]) => Promise<void>;
     handleTogglePinContact: (contactId: string) => Promise<void>;
+    handleSaveQuote: (contactId: string, quote: Quote) => Promise<void>;
+    handleDeleteQuote: (contactId: string, quoteId: string) => Promise<void>;
     restoreContacts: (contactsToRestore: Contact[]) => Promise<void>;
 }
 
@@ -34,34 +36,78 @@ export const ContactProvider: React.FC<ContactProviderProps> = ({ children }) =>
     const { addNotification } = useNotifications();
     
     const [contacts, setContacts] = useState<Contact[]>([]);
+    const migrationRunRef = useRef(false);
     
     // --- DATA LOADING & SYNC ---
     useEffect(() => {
         const loadInitialData = async () => {
             if (isGuestMode) {
                 const sContacts = await idb.getContacts();
-                setContacts(sContacts || []);
+                if (sContacts) {
+                    const { migratedContacts, wasMigrated } = migrateContacts(sContacts);
+                    setContacts(migratedContacts);
+                    if (wasMigrated) {
+                        console.log('Migrating local data to new format...');
+                        await idb.putItems(idb.CONTACTS_STORE, migratedContacts);
+                        addNotification('Updated local data to new format.', 'info');
+                    }
+                }
             } else { setContacts([]); }
         };
         loadInitialData();
-    }, [isGuestMode]);
+    }, [isGuestMode, addNotification]);
     
     useEffect(() => {
         if (isGuestMode || !user || !db) return;
-        const unsubContacts = onSnapshot(collection(db, 'users', user.uid, 'contacts'), (snap) => setContacts(snap.docs.map(d => d.data() as Contact)));
-        return () => { unsubContacts(); };
-    }, [user, isGuestMode]);
+
+        const unsubContacts = onSnapshot(collection(db, 'users', user.uid, 'contacts'), async (snap) => {
+            const serverContacts = snap.docs.map(d => d.data() as Contact);
+            const { migratedContacts, wasMigrated } = migrateContacts(serverContacts);
+
+            setContacts(migratedContacts);
+
+            if (wasMigrated && !migrationRunRef.current) {
+                migrationRunRef.current = true; // Prevent re-running migration in this session
+                console.log('Migrating Firestore data...');
+                addNotification('Updating app data to new format...', 'info');
+
+                try {
+                    const batch = writeBatch(db);
+                    // Find only the contacts that actually changed to be efficient
+                    migratedContacts.forEach((migratedContact) => {
+                        const originalContact = serverContacts.find(c => c.id === migratedContact.id);
+                        // A simple JSON.stringify is sufficient for detecting changes in this context
+                        if (JSON.stringify(originalContact) !== JSON.stringify(migratedContact)) {
+                            const docRef = doc(db, 'users', user.uid, 'contacts', migratedContact.id);
+                            batch.set(docRef, migratedContact);
+                        }
+                    });
+                    await batch.commit();
+                    addNotification('Data format updated successfully!', 'success');
+                } catch (error) {
+                    console.error("Error during data migration:", error);
+                    addNotification("Failed to update data format.", "error");
+                }
+            }
+        });
+        
+        return () => { 
+            unsubContacts(); 
+            migrationRunRef.current = false; // Reset on user change/logout
+        };
+    }, [user, isGuestMode, addNotification]);
 
     const navigateToDetail = (contactId: string, contact: Contact) => {
-        // FIX: This commit resolves multiple TypeScript errors by updating the logic to use the `statusHistory` array instead of deprecated properties like `date` and `status` on the `JobTicket` object. Functions for navigating to job details and clearing route caches now correctly reference `statusHistory` or `createdAt` as the source of truth for dates, ensuring compatibility with the current data model and eliminating type errors.
         if (viewState.type === 'new_form' && viewState.initialJobDate) {
             const rawDate = viewState.initialJobDate.split('_')[0];
             const createdTicket = contact.jobTickets.find(t => {
                 const latestEntry = t.statusHistory && t.statusHistory.length > 0 ? [...t.statusHistory].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0] : null;
                 return latestEntry && latestEntry.timestamp.startsWith(rawDate);
             });
-            setViewState({ type: 'detail', id: contactId, openJobId: createdTicket?.id });
-        } else { setViewState({ type: 'detail', id: contactId }); }
+            setViewState({ type: 'detail', contactId: contactId, openJobId: createdTicket?.id });
+        } else { 
+            setViewState({ type: 'detail', contactId: contactId }); 
+        }
     };
     
     // --- CONTACTS ---
@@ -71,19 +117,20 @@ export const ContactProvider: React.FC<ContactProviderProps> = ({ children }) =>
         
         if (!contactData.id && contactData.jobTickets && contactData.jobTickets.length > 0) {
             const datesToClear = new Set<string>();
-            // FIX: This commit resolves multiple TypeScript errors by updating the logic to use the `statusHistory` array instead of deprecated properties like `date` and `status` on the `JobTicket` object. Functions for navigating to job details and clearing route caches now correctly reference `statusHistory` or `createdAt` as the source of truth for dates, ensuring compatibility with the current data model and eliminating type errors.
             contactData.jobTickets.forEach(ticket => { (ticket.statusHistory || []).forEach(h => datesToClear.add(h.timestamp.split('T')[0])); });
             datesToClear.forEach(date => handleClearRouteForDate(date));
         }
         const newContact = { ...contactData, id: contactId, lastModified: now } as Contact;
         if (isGuestMode) {
+            await idb.putItem(idb.CONTACTS_STORE, newContact);
             const updated = contactData.id ? contacts.map(c => c.id === contactId ? newContact : c) : [...contacts, newContact];
-            await idb.saveContacts(updated); setContacts(updated); navigateToDetail(contactId, newContact); return;
+            setContacts(updated);
+            navigateToDetail(contactId, newContact);
+            return;
         }
         if (!user || !db || !storage) return;
 
         try {
-            setIsGlobalLoading(true); setGlobalLoadingMessage('Uploading files...');
             if (newFileObjects['profile_photo'] && finalPhotoUrl?.startsWith('data:')) {
                 const photoRef = ref(storage, `users/${user.uid}/contacts/${contactId}/profile_photo`);
                 await uploadBytes(photoRef, newFileObjects['profile_photo']); finalPhotoUrl = await getDownloadURL(photoRef);
@@ -95,27 +142,32 @@ export const ContactProvider: React.FC<ContactProviderProps> = ({ children }) =>
                 } return file;
             }));
             const contactToSave: Contact = { ...newContact, photoUrl: finalPhotoUrl, files: processedFiles };
-            setGlobalLoadingMessage('Saving contact...');
             await setDoc(doc(db, 'users', user.uid, 'contacts', contactId), contactToSave, { merge: true });
             navigateToDetail(contactId, contactToSave);
-        } catch (error) { console.error("Error saving contact:", error); addNotification("Failed to save contact.", "error");
-        } finally { setIsGlobalLoading(false); setGlobalLoadingMessage(null); }
+        } catch (error) { 
+            console.error("Error saving contact:", error); 
+            addNotification("Failed to save contact.", "error");
+            throw error; // Re-throw to be caught by the caller for UI updates
+        }
     };
 
     const handleDeleteContact = async (id: string): Promise<boolean> => {
         if (isGuestMode) {
-            const updated = contacts.filter(c => c.id !== id);
-            await idb.saveContacts(updated); setContacts(updated); return true;
+            await idb.deleteItem(idb.CONTACTS_STORE, id);
+            setContacts(prev => prev.filter(c => c.id !== id));
+            return true;
         }
         if (!user || !db || !storage) return false;
         try {
-            setIsGlobalLoading(true); setGlobalLoadingMessage('Deleting...');
             await deleteDoc(doc(db, 'users', user.uid, 'contacts', id));
             const filesRef = ref(storage, `users/${user.uid}/contacts/${id}`);
             const fileList = await listAll(filesRef); await Promise.all(fileList.items.map(itemRef => deleteObject(itemRef)));
             return true;
-        } catch (error) { console.error("Error deleting contact:", error); addNotification("Failed to delete contact.", "error"); return false;
-        } finally { setIsGlobalLoading(false); setGlobalLoadingMessage(null); }
+        } catch (error) { 
+            console.error("Error deleting contact:", error); 
+            addNotification("Failed to delete contact.", "error"); 
+            return false;
+        }
     };
 
     const handleAddFilesToContact = async (contactId: string, newFiles: FileAttachment[], newFileObjects: { [id: string]: File }) => {
@@ -123,21 +175,23 @@ export const ContactProvider: React.FC<ContactProviderProps> = ({ children }) =>
         let updatedFiles = [...contact.files, ...newFiles];
         if (isGuestMode) {
             const updatedContact = { ...contact, files: updatedFiles, lastModified: new Date().toISOString() };
-            const updatedContacts = contacts.map(c => c.id === contactId ? updatedContact : c);
-            await idb.saveContacts(updatedContacts); setContacts(updatedContacts); return;
+            await idb.putItem(idb.CONTACTS_STORE, updatedContact);
+            setContacts(prev => prev.map(c => c.id === contactId ? updatedContact : c));
+            return;
         }
         if (!user || !db || !storage) return;
         try {
-            setIsGlobalLoading(true); setGlobalLoadingMessage('Uploading files...');
             const uploadedFiles = await Promise.all(newFiles.map(async file => {
                 const fileRef = ref(storage, `users/${user.uid}/contacts/${contactId}/${file.id}_${file.name}`);
                 await uploadBytes(fileRef, newFileObjects[file.id]); return { ...file, dataUrl: await getDownloadURL(fileRef) };
             }));
             updatedFiles = [...contact.files, ...uploadedFiles];
-            setGlobalLoadingMessage('Updating contact...');
             await updateDoc(doc(db, 'users', user.uid, 'contacts', contactId), { files: updatedFiles, lastModified: new Date().toISOString() });
-        } catch (error) { console.error("Error adding files:", error); addNotification("Failed to add files.", "error");
-        } finally { setIsGlobalLoading(false); setGlobalLoadingMessage(null); }
+        } catch (error) { 
+            console.error("Error adding files:", error); 
+            addNotification("Failed to add files.", "error");
+            throw error;
+        }
     };
 
     const handleUpdateContactJobTickets = async (contactId: string, ticketDataOrArray: (Omit<JobTicket, "id"> & { id?: string }) | JobTicket[]) => {
@@ -155,7 +209,6 @@ export const ContactProvider: React.FC<ContactProviderProps> = ({ children }) =>
             }
         }
         const datesToClear = new Set<string>();
-        // FIX: This commit resolves multiple TypeScript errors by updating the logic to use the `statusHistory` array instead of deprecated properties like `date` and `status` on the `JobTicket` object. Functions for navigating to job details and clearing route caches now correctly reference `statusHistory` or `createdAt` as the source of truth for dates, ensuring compatibility with the current data model and eliminating type errors.
         updatedTickets.forEach(ticket => {
             (ticket.statusHistory || (ticket.createdAt ? [{timestamp: ticket.createdAt}] : [])).forEach(h => datesToClear.add(h.timestamp.split('T')[0]));
         });
@@ -165,25 +218,68 @@ export const ContactProvider: React.FC<ContactProviderProps> = ({ children }) =>
         datesToClear.forEach(date => handleClearRouteForDate(date));
 
         const updatedContact = { ...contact, jobTickets: updatedTickets, lastModified: new Date().toISOString() };
-        const updatedContacts = contacts.map(c => c.id === contactId ? updatedContact : c);
-        setContacts(updatedContacts);
-        if (isGuestMode) { await idb.saveContacts(updatedContacts); }
+        setContacts(prev => prev.map(c => c.id === contactId ? updatedContact : c));
+
+        if (isGuestMode) { 
+            await idb.putItem(idb.CONTACTS_STORE, updatedContact);
+        }
         else if (user && db) { await updateDoc(doc(db, 'users', user.uid, 'contacts', contactId), { jobTickets: updatedTickets, lastModified: new Date().toISOString() }); }
+    };
+
+    const handleSaveQuote = async (contactId: string, quote: Quote) => {
+        const contact = contacts.find(c => c.id === contactId);
+        if (!contact) return;
+        const existingIndex = (contact.quotes || []).findIndex(q => q.id === quote.id);
+        let updatedQuotes;
+        if (existingIndex > -1) {
+            updatedQuotes = (contact.quotes || []).map(q => q.id === quote.id ? quote : q);
+        } else {
+            updatedQuotes = [...(contact.quotes || []), quote];
+        }
+        const updatedContact = { ...contact, quotes: updatedQuotes, lastModified: new Date().toISOString() };
+        setContacts(prev => prev.map(c => c.id === contactId ? updatedContact : c));
+        if (isGuestMode) { await idb.putItem(idb.CONTACTS_STORE, updatedContact); }
+        else if (user && db) { await updateDoc(doc(db, 'users', user.uid, 'contacts', contactId), { quotes: updatedQuotes, lastModified: new Date().toISOString() }); }
+    };
+
+    const handleDeleteQuote = async (contactId: string, quoteId: string) => {
+        const contact = contacts.find(c => c.id === contactId);
+        if (!contact || !contact.quotes) return;
+        const updatedQuotes = contact.quotes.filter(q => q.id !== quoteId);
+        const updatedContact = { ...contact, quotes: updatedQuotes, lastModified: new Date().toISOString() };
+        setContacts(prev => prev.map(c => c.id === contactId ? updatedContact : c));
+        if (isGuestMode) { await idb.putItem(idb.CONTACTS_STORE, updatedContact); }
+        else if (user && db) { await updateDoc(doc(db, 'users', user.uid, 'contacts', contactId), { quotes: updatedQuotes, lastModified: new Date().toISOString() }); }
     };
 
     const handleTogglePinContact = async (contactId: string) => {
         const contact = contacts.find(c => c.id === contactId); if (!contact) return;
+        
+        // Optimistic UI update
+        const originalContacts = contacts;
         const updatedContact = { ...contact, isPinned: !contact.isPinned, lastModified: new Date().toISOString() };
-        const updatedContacts = contacts.map(c => c.id === contactId ? updatedContact : c);
-        setContacts(updatedContacts);
-        if (isGuestMode) { await idb.saveContacts(updatedContacts); }
-        else if (user && db) { await updateDoc(doc(db, 'users', user.uid, 'contacts', contactId), { isPinned: updatedContact.isPinned, lastModified: updatedContact.lastModified }); }
+        setContacts(prev => prev.map(c => c.id === contactId ? updatedContact : c));
+
+        try {
+            if (isGuestMode) { 
+                await idb.putItem(idb.CONTACTS_STORE, updatedContact);
+            }
+            else if (user && db) { 
+                await updateDoc(doc(db, 'users', user.uid, 'contacts', contactId), { isPinned: updatedContact.isPinned, lastModified: updatedContact.lastModified }); 
+            }
+        } catch (error) {
+            // Revert on failure
+            setContacts(originalContacts);
+            addNotification('Failed to update pin status. Please try again.', 'error');
+            console.error("Error toggling pin:", error);
+        }
     };
 
     const restoreContacts = async (contactsToRestore: Contact[]) => {
         setContacts(contactsToRestore);
         if (isGuestMode) {
-            await idb.saveContacts(contactsToRestore);
+            await idb.clearStore(idb.CONTACTS_STORE);
+            await idb.putItems(idb.CONTACTS_STORE, contactsToRestore);
         } else if (user && db) {
             const collRef = collection(db, 'users', user.uid, 'contacts');
             const snapshot = await getDocs(collRef);
@@ -202,6 +298,8 @@ export const ContactProvider: React.FC<ContactProviderProps> = ({ children }) =>
         handleAddFilesToContact,
         handleUpdateContactJobTickets,
         handleTogglePinContact,
+        handleSaveQuote,
+        handleDeleteQuote,
         restoreContacts,
     };
 

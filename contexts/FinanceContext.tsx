@@ -85,19 +85,6 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
         return () => { unsubExpenses(); unsubBank(); unsubStatements(); };
     }, [user, isGuestMode]);
 
-    const persistMultiple = async (store: 'expenses' | 'bank' | 'statements', data: any[]) => {
-        if (isGuestMode) {
-            if (store === 'expenses') await idb.saveExpenses(data);
-            if (store === 'bank') await idb.saveBankTransactions(data);
-            if (store === 'statements') await idb.saveBankStatements(data);
-        } else if (user && db) {
-            const collectionName = store === 'bank' ? 'bankTransactions' : store === 'statements' ? 'bankStatements' : 'expenses';
-            const batch = writeBatch(db);
-            data.forEach(item => batch.set(doc(db, 'users', user.uid, collectionName, item.id), item, { merge: true }));
-            await batch.commit();
-        }
-    };
-
     const runManualReconciliation = useCallback(async (updatedExpenses: Expense[] | null = null, updatedBankTxns: BankTransaction[] | null = null) => {
         const currentExpenses = updatedExpenses || expenses; const currentBankTxns = updatedBankTxns || bankTransactions;
         const unreconciledExpenses = currentExpenses.filter(e => !e.isReconciled && !e.isDeferred);
@@ -105,21 +92,36 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
         if (unreconciledExpenses.length === 0 || unreconciledBankTxns.length === 0) return;
         let matches = 0;
         const matchedExpenseIds = new Set<string>(); const matchedBankTxnIds = new Set<string>();
+        const matchedExpenses: Expense[] = [];
+
         for (const exp of unreconciledExpenses) {
             for (const txn of unreconciledBankTxns) {
                 if (matchedBankTxnIds.has(txn.id)) continue;
                 if (Math.abs(exp.total - Math.abs(txn.amount)) < 0.01) {
-                    matchedExpenseIds.add(exp.id); matchedBankTxnIds.add(txn.id); matches++;
+                    matchedExpenseIds.add(exp.id);
+                    matchedBankTxnIds.add(txn.id);
+                    matchedExpenses.push(exp);
+                    matches++;
                     break;
                 }
             }
         }
         if (matches > 0) {
+            const totalMatchedAmount = matchedExpenses.reduce((sum, exp) => sum + exp.total, 0);
             const newExpenses = currentExpenses.map(e => matchedExpenseIds.has(e.id) ? { ...e, isReconciled: true, bankTransactionIds: bankTransactions.find(t => Math.abs(e.total - Math.abs(t.amount)) < 0.01)?.id ? [bankTransactions.find(t => Math.abs(e.total - Math.abs(t.amount)) < 0.01)!.id] : [] } : e);
             const newBankTxns = currentBankTxns.map(t => matchedBankTxnIds.has(t.id) ? { ...t, isReconciled: true } : t);
             setExpenses(newExpenses); setBankTransactions(newBankTxns);
-            await Promise.all([persistMultiple('expenses', newExpenses), persistMultiple('bank', newBankTxns)]);
-            addNotification(`Automatically reconciled ${matches} transaction(s).`, 'success');
+
+            if (isGuestMode) {
+                await idb.putItems(idb.EXPENSES_STORE, newExpenses.filter(e => matchedExpenseIds.has(e.id)));
+                await idb.putItems(idb.BANK_TRANSACTIONS_STORE, newBankTxns.filter(t => matchedBankTxnIds.has(t.id)));
+            } else if (user && db) {
+                const batch = writeBatch(db);
+                newExpenses.filter(e => matchedExpenseIds.has(e.id)).forEach(e => batch.update(doc(db, 'users', user.uid, 'expenses', e.id), { isReconciled: true, bankTransactionIds: e.bankTransactionIds }));
+                newBankTxns.filter(t => matchedBankTxnIds.has(t.id)).forEach(t => batch.update(doc(db, 'users', user.uid, 'bankTransactions', t.id), { isReconciled: true }));
+                await batch.commit();
+            }
+            addNotification(`Matched ${matches} expense(s) totaling $${totalMatchedAmount.toFixed(2)}.`, 'success');
         } else { addNotification('No automatic matches found.', 'info'); }
     }, [expenses, bankTransactions, addNotification, isGuestMode, user, db]);
 
@@ -129,19 +131,29 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
             const index = updatedExpenses.findIndex(e => e.id === exp.id);
             if (index > -1) updatedExpenses[index] = exp; else updatedExpenses.push(exp);
         });
-        setExpenses(updatedExpenses); await persistMultiple('expenses', updatedExpenses);
+        setExpenses(updatedExpenses);
+
+        if (isGuestMode) {
+            await idb.putItems(idb.EXPENSES_STORE, expensesToSave);
+        } else if (user && db) {
+            const batch = writeBatch(db);
+            expensesToSave.forEach(exp => batch.set(doc(db, 'users', user.uid, 'expenses', exp.id), exp, { merge: true }));
+            await batch.commit();
+        }
         if(runReconciliation) runManualReconciliation(updatedExpenses);
     };
 
     const handleDeleteExpense = async (expenseId: string): Promise<boolean> => {
         const expenseToDelete = expenses.find(e => e.id === expenseId); if (!expenseToDelete) return false;
-        const updatedExpenses = expenses.filter(e => e.id !== expenseId);
+        
         if (expenseToDelete.bankTransactionIds) {
             const txnsToUnreconcile = bankTransactions.filter(t => expenseToDelete.bankTransactionIds?.includes(t.id)).map(t => ({...t, isReconciled: false}));
             if(txnsToUnreconcile.length > 0) handleSaveBankTransactions(txnsToUnreconcile);
         }
-        setExpenses(updatedExpenses);
-        if (isGuestMode) { await idb.saveExpenses(updatedExpenses); }
+        
+        setExpenses(prev => prev.filter(e => e.id !== expenseId));
+
+        if (isGuestMode) { await idb.deleteItem(idb.EXPENSES_STORE, expenseId); }
         else if (user && db) { await deleteDoc(doc(db, 'users', user.uid, 'expenses', expenseId)); }
         return true;
     };
@@ -169,8 +181,16 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
                 transactions.forEach(t => t.statementId = newStatement.id);
                 setBankStatements(prev => [...prev, newStatement]);
                 setBankTransactions(prev => [...prev, ...transactions]);
-                await persistMultiple('statements', [...bankStatements, newStatement]);
-                await persistMultiple('bank', [...bankTransactions, ...transactions]);
+
+                if (isGuestMode) {
+                    await idb.putItem(idb.BANK_STATEMENTS_STORE, newStatement);
+                    await idb.putItems(idb.BANK_TRANSACTIONS_STORE, transactions);
+                } else if (user && db) {
+                    const batch = writeBatch(db);
+                    batch.set(doc(db, 'users', user.uid, 'bankStatements', newStatement.id), newStatement);
+                    transactions.forEach(t => batch.set(doc(db, 'users', user.uid, 'bankTransactions', t.id), t));
+                    await batch.commit();
+                }
                 runManualReconciliation(null, [...bankTransactions, ...transactions]);
             }
             return { success: true };
@@ -180,26 +200,51 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     const handleSaveBankTransactions = async (transactionsToSave: BankTransaction[]) => {
         const updatedTxns = [...bankTransactions];
         transactionsToSave.forEach(txn => { const index = updatedTxns.findIndex(t => t.id === txn.id); if (index > -1) updatedTxns[index] = txn; });
-        setBankTransactions(updatedTxns); await persistMultiple('bank', updatedTxns);
+        setBankTransactions(updatedTxns);
+
+        if(isGuestMode) {
+            await idb.putItems(idb.BANK_TRANSACTIONS_STORE, transactionsToSave);
+        } else if (user && db) {
+            const batch = writeBatch(db);
+            transactionsToSave.forEach(txn => batch.set(doc(db, 'users', user.uid, 'bankTransactions', txn.id), txn, { merge: true }));
+            await batch.commit();
+        }
     };
 
     const handleDeleteBankStatement = async (statementId: string) => {
-        const txnsToDelete = bankTransactions.filter(t => t.statementId === statementId);
+        const txnsToDeleteIds = bankTransactions.filter(t => t.statementId === statementId).map(t => t.id);
         const expensesToUnreconcile: Expense[] = [];
-        txnsToDelete.forEach(txn => { expenses.forEach(exp => { if(exp.bankTransactionIds?.includes(txn.id)) expensesToUnreconcile.push({...exp, isReconciled: false, bankTransactionIds: []})})});
+        txnsToDeleteIds.forEach(txnId => { expenses.forEach(exp => { if(exp.bankTransactionIds?.includes(txnId)) expensesToUnreconcile.push({...exp, isReconciled: false, bankTransactionIds: []})})});
         
-        const updatedStatements = bankStatements.filter(s => s.id !== statementId);
-        const updatedTxns = bankTransactions.filter(t => t.statementId !== statementId);
-        setBankStatements(updatedStatements); setBankTransactions(updatedTxns);
-        await persistMultiple('statements', updatedStatements);
-        await persistMultiple('bank', updatedTxns);
+        setBankStatements(prev => prev.filter(s => s.id !== statementId));
+        setBankTransactions(prev => prev.filter(t => t.statementId !== statementId));
+        
+        if (isGuestMode) {
+            await idb.deleteItem(idb.BANK_STATEMENTS_STORE, statementId);
+            await idb.deleteItems(idb.BANK_TRANSACTIONS_STORE, txnsToDeleteIds);
+        } else if (user && db) {
+            const batch = writeBatch(db);
+            batch.delete(doc(db, 'users', user.uid, 'bankStatements', statementId));
+            txnsToDeleteIds.forEach(id => batch.delete(doc(db, 'users', user.uid, 'bankTransactions', id)));
+            await batch.commit();
+        }
+
         if (expensesToUnreconcile.length > 0) await handleSaveExpenses(expensesToUnreconcile, false);
     };
 
     const handleDeleteAllBankData = async () => {
         const expensesToUnreconcile = expenses.filter(e => e.isReconciled).map(e => ({...e, isReconciled: false, bankTransactionIds: []}));
         setBankStatements([]); setBankTransactions([]);
-        await persistMultiple('statements', []); await persistMultiple('bank', []);
+
+        if (isGuestMode) {
+            await idb.clearStore(idb.BANK_STATEMENTS_STORE);
+            await idb.clearStore(idb.BANK_TRANSACTIONS_STORE);
+        } else if (user && db) {
+            const batch = writeBatch(db);
+            (await getDocs(collection(db, 'users', user.uid, 'bankStatements'))).forEach(d => batch.delete(d.ref));
+            (await getDocs(collection(db, 'users', user.uid, 'bankTransactions'))).forEach(d => batch.delete(d.ref));
+            await batch.commit();
+        }
         await handleSaveExpenses(expensesToUnreconcile, false);
         addNotification("All bank data cleared.", "success");
     };
@@ -210,9 +255,12 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
         setBankStatements(data.bankStatements);
 
         if (isGuestMode) {
-            await idb.saveExpenses(data.expenses);
-            await idb.saveBankTransactions(data.bankTransactions);
-            await idb.saveBankStatements(data.bankStatements);
+            await idb.clearStore(idb.EXPENSES_STORE);
+            await idb.putItems(idb.EXPENSES_STORE, data.expenses);
+            await idb.clearStore(idb.BANK_TRANSACTIONS_STORE);
+            await idb.putItems(idb.BANK_TRANSACTIONS_STORE, data.bankTransactions);
+            await idb.clearStore(idb.BANK_STATEMENTS_STORE);
+            await idb.putItems(idb.BANK_STATEMENTS_STORE, data.bankStatements);
         } else if (user && db) {
             const collections = ['expenses', 'bankTransactions', 'bankStatements'];
              for (const coll of collections) {
@@ -221,7 +269,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
                 const batch = writeBatch(db);
                 snapshot.docs.forEach(d => batch.delete(d.ref));
                 
-                const dataToRestore = (data as any)[coll] || [];
+                const dataToRestore = (data as any)[coll === 'bankTransactions' ? 'bankTransactions' : coll === 'bankStatements' ? 'bankStatements' : 'expenses'] || [];
                 dataToRestore.forEach((item: any) => batch.set(doc(db, 'users', user.uid, coll, item.id), item));
                 
                 await batch.commit();

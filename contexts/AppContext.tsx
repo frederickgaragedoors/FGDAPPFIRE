@@ -23,7 +23,6 @@ export interface AppContextType {
     showContactPhotos: boolean;
     routes: Record<string, SavedRouteStop[]>;
     categorizationRules: CategorizationRule[];
-    // FIX: Expose the raw settings object for components that need properties not explicitly destructured.
     settings: any;
 
     // Actions
@@ -112,14 +111,16 @@ export const AppProvider: React.FC<AppProviderProps> = ({ user, isGuestMode, onS
     const handleSaveCategorizationRules = async (rules: CategorizationRule[]) => {
         setCategorizationRules(rules);
         if (isGuestMode) {
-            await idb.saveCategorizationRules(rules);
+            await idb.clearStore(idb.CATEGORIZATION_RULES_STORE);
+            await idb.putItems(idb.CATEGORIZATION_RULES_STORE, rules);
         } else if (user && db) {
             const batch = writeBatch(db);
             const existingRulesSnapshot = await getDocs(collection(db, 'users', user.uid, 'categorizationRules'));
             const existingRulesIds = new Set(existingRulesSnapshot.docs.map(d => d.id));
             const newRuleIds = new Set(rules.map(r => r.id));
             
-            existingRulesIds.forEach(oldId => {
+            // FIX: Explicitly type `oldId` as a string to resolve a TypeScript inference issue where it was being treated as 'unknown'.
+            existingRulesIds.forEach((oldId: string) => {
                 if (!newRuleIds.has(oldId)) {
                     batch.delete(doc(db, 'users', user.uid, 'categorizationRules', oldId));
                 }
@@ -158,8 +159,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ user, isGuestMode, onS
     }, [settings.enabledStatuses]);
     const showContactPhotos = useMemo(() => settings.showContactPhotos !== false, [settings.showContactPhotos]);
     const mapSettings = useMemo(() => ({
-        // FIX: Explicitly cast env var to a string to satisfy the type requirement. Use String() for safe conversion from unknown.
-        apiKey: settings.mapSettings?.apiKey || String((import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || ''),
+        apiKey: settings.mapSettings?.apiKey || ((import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY as string) || '',
         homeAddress: settings.mapSettings?.homeAddress || ''
     }), [settings.mapSettings]);
     const routes = useMemo(() => settings.routes || {}, [settings.routes]);

@@ -1,14 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
 import { generateId } from '../utils.ts';
 import Notification from '../components/Notification.tsx';
-
-export type NotificationType = 'success' | 'error' | 'info';
-
-export interface Notification {
-    id: string;
-    message: string;
-    type: NotificationType;
-}
+import { NotificationType, AppNotification } from '../types.ts';
 
 interface NotificationContextType {
     addNotification: (message: string, type?: NotificationType) => void;
@@ -25,7 +18,7 @@ export const useNotifications = () => {
 };
 
 export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const [notifications, setNotifications] = useState<Notification[]>([]);
+    const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
     const addNotification = useCallback((message: string, type: NotificationType = 'info') => {
         const id = generateId();
