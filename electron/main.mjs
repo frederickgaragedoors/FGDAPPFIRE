@@ -3,9 +3,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import http from 'http';
 import nodeNet from 'net';
-import process from 'process';
-// FIX: Import Buffer to resolve 'Cannot find name' error.
 import { Buffer } from 'buffer';
+import { GoogleGenAI } from '@google/genai';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,7 +32,6 @@ function findFreePort(startPort) {
       resolve(findFreePort(startPort + 1));
     });
     server.listen(startPort, '127.0.0.1', () => {
-      // FIX: Safely get port from server address, which can be an object or string.
       const address = server.address();
       server.close(() => {
         if (address && typeof address === 'object') {
@@ -47,16 +45,40 @@ function findFreePort(startPort) {
   });
 }
 
-// FIX: Changed JSDoc to use @returns for better type inference.
 /**
  * Creates a local HTTP server to serve the dist folder.
- * A promise that resolves with the port number the server is listening on.
- * @returns {Promise<{port: number}>}
+ * @returns {Promise<{port: number}>} A promise that resolves with the port number the server is listening on.
  */
 const createLocalServer = async () => {
   const distPath = path.join(__dirname, '../dist');
 
   const server = http.createServer(async (req, res) => {
+    // Gemini API Proxy for Electron App
+    if (req.url === '/api/generate' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => {
+            body += chunk.toString();
+        });
+        req.on('end', async () => {
+            try {
+                const { model, contents, config } = JSON.parse(body);
+                if (!process.env.GEMINI_API_KEY) {
+                    throw new Error("GEMINI_API_KEY environment variable not set for Electron build.");
+                }
+                const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+                const geminiResponse = await ai.models.generateContent({ model, contents, config });
+                
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(geminiResponse));
+            } catch (e) {
+                console.error("Electron proxy error:", e);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: e.message } }));
+            }
+        });
+        return; // Stop further processing
+    }
+
     // Map the request URL to a file path.
     const urlPath = req.url === '/' ? '/index.html' : req.url;
     const requestedPath = path.join(distPath, urlPath);
@@ -149,7 +171,6 @@ const createWindow = async () => {
   } else {
     // In production, create and load from our robust local server.
     try {
-      // FIX: JSDoc on createLocalServer helps TypeScript infer the correct return type here.
       const { port } = await createLocalServer();
       mainWindow.loadURL(`http://localhost:${port}`);
     } catch (error) {
