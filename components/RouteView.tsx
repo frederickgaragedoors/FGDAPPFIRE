@@ -130,7 +130,7 @@ const getTomorrowDateString = () => {
 
 const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack, onViewJobDetail, initialDate }) => {
     const { mapSettings, businessInfo, handleSaveRoute, handleClearRouteForDate, routes } = useApp();
-    const { error: mapsError } = useGoogleMaps(mapSettings.apiKey);
+    const { isLoaded: isMapsLoaded, error: mapsError } = useGoogleMaps(mapSettings.apiKey);
     const [selectedDate, setSelectedDate] = useState(initialDate || getLocalDateString(new Date()));
     const [isAddStopModalOpen, setIsAddStopModalOpen] = useState(false);
     const [addStopIndex, setAddStopIndex] = useState<number | null>(null);
@@ -275,7 +275,13 @@ const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack, onViewJob
                 onDeleteStop={handleDeleteStop}
                 onViewJobDetail={onViewJobDetail}
             />
-            <RouteMap routeStops={routeStops} />
+            {isMapsLoaded ? (
+                <RouteMap routeStops={routeStops} />
+            ) : (
+                <div className="md:w-2/3 lg:w-3/4 h-1/2 md:h-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                    <div className="text-slate-500">Loading Map...</div>
+                </div>
+            )}
         </div>
       </div>
     );

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { DefaultFieldSetting, BusinessInfo, JobTemplate, JobStatus, ALL_JOB_STATUSES, EmailSettings, CatalogItem, DEFAULT_ON_MY_WAY_TEMPLATE, MapSettings, Theme, CategorizationRule, ExpenseCategory, ALL_EXPENSE_CATEGORIES, Supplier } from '../types.ts';
-import { ArrowLeftIcon, TrashIcon, PlusIcon, DownloadIcon, UploadIcon, UserCircleIcon, EditIcon, CalendarIcon, ChevronDownIcon, MapPinIcon, BuildingStorefrontIcon } from './icons.tsx';
+import { DefaultFieldSetting, BusinessInfo, JobTemplate, JobStatus, ALL_JOB_STATUSES, EmailSettings, CatalogItem, DEFAULT_ON_MY_WAY_TEMPLATE, MapSettings, Theme, CategorizationRule, ExpenseCategory, ALL_EXPENSE_CATEGORIES, Supplier, AiSettings } from '../types.ts';
+import { ArrowLeftIcon, TrashIcon, PlusIcon, DownloadIcon, UploadIcon, UserCircleIcon, EditIcon, CalendarIcon, ChevronDownIcon, MapPinIcon, BuildingStorefrontIcon, SparklesIcon } from './icons.tsx';
 import { saveJsonFile, fileToDataUrl, generateICSContent, downloadICSFile, generateId } from '../utils.ts';
 import JobTemplateModal from './JobTemplateModal.tsx';
 import { useGoogleMaps } from '../hooks/useGoogleMaps.ts';
@@ -60,6 +60,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
         enabledStatuses,
         showContactPhotos,
         mapSettings,
+        aiSettings,
         routes,
         user,
         saveSettings,
@@ -85,7 +86,8 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
             jobTemplates,
             partsCatalog,
             enabledStatuses,
-            mapSettings,
+            mapSettings: { homeAddress: mapSettings.homeAddress, apiKey: mapSettings.apiKey },
+            aiSettings: { geminiApiKey: aiSettings.geminiApiKey }, // Include AI settings
             showContactPhotos,
             routes,
         },
@@ -93,7 +95,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
         version: '1.0'
     }), [
         contacts, expenses, bankTransactions, bankStatements, mileageLogs,
-        defaultFields, businessInfo, emailSettings, jobTemplates, partsCatalog, enabledStatuses, mapSettings, showContactPhotos, routes, categorizationRules
+        defaultFields, businessInfo, emailSettings, jobTemplates, partsCatalog, enabledStatuses, mapSettings, aiSettings, showContactPhotos, routes, categorizationRules
     ]);
 
     const restoreBackup = useCallback(async (backupContent: string) => {
@@ -116,6 +118,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
     const [currentBusinessInfo, setCurrentBusinessInfo] = useState<BusinessInfo>(businessInfo);
     const [currentEmailSettings, setCurrentEmailSettings] = useState<EmailSettings>(emailSettings);
     const [currentMapSettings, setCurrentMapSettings] = useState<MapSettings>(mapSettings);
+    const [currentAiSettings, setCurrentAiSettings] = useState<AiSettings>(aiSettings);
     const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
     const [editingTemplate, setEditingTemplate] = useState<JobTemplate | null>(null);
     const [newCatalogItemName, setNewCatalogItemName] = useState('');
@@ -131,8 +134,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
 
     const homeAddressRef = useRef<HTMLInputElement>(null);
     const supplierAddressRef = useRef<HTMLInputElement>(null);
-    const apiKey = currentMapSettings.apiKey || mapSettings.apiKey;
-    const { isLoaded: isMapsLoaded } = useGoogleMaps(apiKey);
+    const { isLoaded: isMapsLoaded } = useGoogleMaps(mapSettings.apiKey);
 
     const updateTheme = (newTheme: Theme) => {
         setTheme(newTheme);
@@ -142,6 +144,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
     useEffect(() => { setCurrentBusinessInfo(businessInfo) }, [businessInfo]);
     useEffect(() => { setCurrentEmailSettings(emailSettings) }, [emailSettings]);
     useEffect(() => { setCurrentMapSettings(mapSettings) }, [mapSettings]);
+    useEffect(() => { setCurrentAiSettings(aiSettings) }, [aiSettings]);
     useEffect(() => { setCurrentRules(categorizationRules || []) }, [categorizationRules]);
 
 
@@ -192,6 +195,10 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
     const handleMapSettingsChange = (field: keyof MapSettings, value: string) => {
         setCurrentMapSettings(prev => ({ ...prev, [field]: value }));
     };
+
+    const handleAiSettingsChange = (field: keyof AiSettings, value: string) => {
+        setCurrentAiSettings(prev => ({ ...prev, [field]: value }));
+    };
     
     const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -214,8 +221,14 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
 
     const handleMapSettingsSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        saveSettings({ mapSettings: currentMapSettings, businessInfo: currentBusinessInfo });
+        saveSettings({ mapSettings: currentMapSettings });
         addNotification('Map settings saved.', 'success');
+    };
+
+    const handleAiSettingsSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        saveSettings({ aiSettings: currentAiSettings });
+        addNotification('AI settings saved.', 'success');
     };
     
     const handleManualBackup = async () => {
@@ -522,7 +535,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
                      <button onClick={handleBusinessInfoSubmit} className="mt-4 px-4 py-2 rounded-md text-sm font-medium text-white bg-sky-500 hover:bg-sky-600 transition-colors">Save Suppliers</button>
                 </SettingsSection>
 
-                <SettingsSection title="Map & Route Settings" subtitle="Configure your starting location and API key for routing.">
+                <SettingsSection title="Map & Route Settings" subtitle="Configure your starting location for routing.">
                     <form onSubmit={handleMapSettingsSubmit}>
                         <div className="mt-2 space-y-4">
                             <div>
@@ -534,25 +547,97 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
                                 <label htmlFor="mileage-rate" className={labelStyles}>Standard Mileage Rate ($ per mile)</label>
                                 <input type="number" id="mileage-rate" value={currentBusinessInfo.standardMileageRate || ''} onChange={e => handleBusinessInfoChange('standardMileageRate', parseFloat(e.target.value))} step="0.001" className={inputStyles} placeholder="e.g. 0.655" />
                             </div>
-                            <div>
-                                <label htmlFor="api-key" className={labelStyles}>Google Maps API Key</label>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Required for routing, maps, and travel time calculations.</p>
-                                <input type="password" id="api-key" value={currentMapSettings.apiKey || ''} onChange={e => handleMapSettingsChange('apiKey', e.target.value)} className={inputStyles} placeholder="AIza..." />
+                             <div>
+                                <label htmlFor="maps-api-key" className={labelStyles}>Google Maps API Key</label>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Required for address autocomplete and route planning.</p>
+                                <input 
+                                    type="password" 
+                                    id="maps-api-key" 
+                                    value={currentMapSettings.apiKey || ''} 
+                                    onChange={e => handleMapSettingsChange('apiKey', e.target.value)} 
+                                    className={inputStyles} 
+                                    placeholder="Enter your Google Maps API Key"
+                                />
+                                 <a href="https://console.cloud.google.com/google/maps-apis/api-list" target="_blank" rel="noopener noreferrer" className="text-xs text-sky-600 dark:text-sky-400 hover:underline mt-1 inline-block">
+                                    Get an API Key &rarr;
+                                </a>
                                 <div className="mt-2 text-xs text-slate-500 dark:text-slate-400 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-md border border-slate-200 dark:border-slate-600">
-                                    <p className="font-semibold mb-1 text-slate-600 dark:text-slate-300">Configuration Help:</p>
-                                    <p>For all map features to work, ensure you have enabled these APIs in your Google Cloud project:</p>
-                                    <ul className="list-disc list-inside mt-1 space-y-1">
-                                        <li><strong className="text-slate-700 dark:text-slate-200">Maps JavaScript API</strong> (for the map view)</li>
-                                        <li><strong className="text-slate-700 dark:text-slate-200">Places API</strong> (for address autocomplete)</li>
-                                        <li><strong className="text-slate-700 dark:text-slate-200">Directions API</strong> (for route planning)</li>
+                                    <p className="font-semibold mb-1 text-slate-600 dark:text-slate-300">Required APIs:</p>
+                                    <ul className="list-disc list-inside space-y-1">
+                                        <li>Maps JavaScript API (for the map view)</li>
+                                        <li>Places API (for address autocomplete)</li>
+                                        <li>Directions API (for route planning)</li>
                                     </ul>
-                                    <a href="https://console.cloud.google.com/google/maps-apis/api-list" target="_blank" rel="noopener noreferrer" className="text-sky-600 dark:text-sky-400 hover:underline mt-2 inline-block">
-                                        Go to Google Cloud API Library &rarr;
-                                    </a>
+                                </div>
+                                <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg text-xs text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-700 space-y-3">
+                                    <p className="font-bold text-sm">Facing "Referer Not Allowed" Errors? Read This.</p>
+                                    
+                                    <div className="p-3 bg-white dark:bg-slate-800/50 rounded-md border border-amber-200 dark:border-amber-800">
+                                        <p className="font-semibold mb-2 text-amber-900 dark:text-amber-100">The Problem with Desktop Apps</p>
+                                        <p className="text-[11px] leading-relaxed">
+                                            This desktop application runs locally from a special <code className="font-mono text-xs bg-amber-100 dark:bg-amber-900/50 p-0.5 rounded">file://</code> address. For security, Google Maps does not allow these addresses to be authorized. While whitelisting <code className="font-mono text-xs bg-amber-100 dark:bg-amber-900/50 p-0.5 rounded">http://localhost:3001/*</code> is a common workaround, it is often unreliable in packaged desktop apps.
+                                        </p>
+                                    </div>
+
+                                    <div className="p-3 bg-green-50 dark:bg-green-900/30 rounded-md border border-green-200 dark:border-green-800">
+                                        <p className="font-semibold mb-2 text-green-900 dark:text-green-200">Recommended Solution for This Desktop App</p>
+                                        <p className="text-[11px] leading-relaxed text-green-800 dark:text-green-300">
+                                            The most reliable fix is to create a <strong>separate, unrestricted API key</strong> used <em>only</em> for this application.
+                                        </p>
+                                        <ol className="list-decimal list-inside text-[11px] mt-2 space-y-1 text-green-700 dark:text-green-400">
+                                            <li>Go to the Google Cloud Console &gt; Credentials.</li>
+                                            <li>Click <strong>CREATE CREDENTIALS</strong> &gt; <strong>API Key</strong>.</li>
+                                            <li>Name it something clear, like "Business Contacts Desktop Key".</li>
+                                            <li>Under "Application restrictions", select <strong>None</strong>. Click Save.</li>
+                                            <li><strong>Important Security:</strong> Since this key is unrestricted, go to "Billing" and <a href="https://cloud.google.com/billing/docs/how-to/budgets" target="_blank" rel="noopener noreferrer" className="font-bold underline">set up billing alerts</a> to prevent unexpected charges.</li>
+                                            <li>Copy your new, unrestricted key and paste it into the field above.</li>
+                                        </ol>
+                                    </div>
+                                    
+                                    <p className="text-center text-[10px] text-amber-600 dark:text-amber-400 pt-2">
+                                        <strong>For Web Deployments:</strong> Use a <em>different</em>, restricted key and add your website URL (e.g., <code className="font-mono">your-app.vercel.app/*</code>) to its "Website restrictions".
+                                    </p>
                                 </div>
                             </div>
                         </div>
                         <button type="submit" className="mt-4 px-4 py-2 rounded-md text-sm font-medium text-white bg-sky-500 hover:bg-sky-600 transition-colors">Save Map Settings</button>
+                    </form>
+                </SettingsSection>
+
+                <SettingsSection title="AI Services" subtitle="Configure API keys for AI-powered features.">
+                    <form onSubmit={handleAiSettingsSubmit}>
+                        <div className="mt-2 space-y-4">
+                            <div>
+                                <label htmlFor="gemini-api-key" className={labelStyles}>Gemini API Key</label>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Required for Social Media post generation and other AI features.</p>
+                                <input 
+                                    type="password" 
+                                    id="gemini-api-key" 
+                                    value={currentAiSettings.geminiApiKey || ''} 
+                                    onChange={e => handleAiSettingsChange('geminiApiKey', e.target.value)} 
+                                    className={inputStyles} 
+                                    placeholder="Enter your Gemini API Key"
+                                />
+                                <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-xs text-sky-600 dark:text-sky-400 hover:underline mt-1 inline-block">
+                                    Get a Gemini API Key &rarr;
+                                </a>
+                                <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg text-xs text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-700 space-y-2">
+                                    <p className="font-bold text-sm">Getting Quota Errors (429)?</p>
+                                    <p className="text-[11px] leading-relaxed">
+                                        Advanced AI features like image generation often require a Google Cloud project with billing enabled, even if you stay within the free tier. This is to prevent abuse. If you see a "Quota Exceeded" error with a limit of `0`, it means this feature is not active for your key.
+                                    </p>
+                                    <div className="p-3 bg-green-50 dark:bg-green-900/30 rounded-md border border-green-200 dark:border-green-800">
+                                        <p className="font-semibold text-sm mb-2 text-green-900 dark:text-green-200">Solution</p>
+                                         <ol className="list-decimal list-inside text-[11px] space-y-1 text-green-700 dark:text-green-400">
+                                            <li>Ensure your API key is from a project in the <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer" className="font-bold underline">Google Cloud Console</a>.</li>
+                                            <li>Navigate to the <strong>Billing</strong> section for that project.</li>
+                                            <li>Make sure a valid billing account is linked. This is required to use most multimodal models.</li>
+                                        </ol>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <button type="submit" className="mt-4 px-4 py-2 rounded-md text-sm font-medium text-white bg-sky-500 hover:bg-sky-600 transition-colors">Save AI Settings</button>
                     </form>
                 </SettingsSection>
 
