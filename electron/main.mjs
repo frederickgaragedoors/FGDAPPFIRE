@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, net } from 'electron';
+import { app, BrowserWindow, dialog, net, ipcMain } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import http from 'http';
@@ -18,6 +18,17 @@ process.on('uncaughtException', (error) => {
 });
 
 let mainWindow;
+
+// Module-level variable to hold the API key received from the renderer process.
+// It falls back to the environment variable, which is useful for development or build-time injection.
+let geminiApiKey = process.env.GEMINI_API_KEY;
+
+// Listen for the 'set-gemini-key' event from the renderer process.
+ipcMain.on('set-gemini-key', (event, key) => {
+  console.log('Received Gemini API Key from renderer.');
+  geminiApiKey = key;
+});
+
 
 // Helper to find a free port to avoid conflicts
 /**
@@ -62,10 +73,10 @@ const createLocalServer = async () => {
         req.on('end', async () => {
             try {
                 const { model, contents, config } = JSON.parse(body);
-                if (!process.env.GEMINI_API_KEY) {
-                    throw new Error("GEMINI_API_KEY environment variable not set for Electron build.");
+                if (!geminiApiKey) {
+                    throw new Error("Gemini API Key has not been set. Please add it in Settings > AI Services.");
                 }
-                const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+                const ai = new GoogleGenAI({ apiKey: geminiApiKey });
                 const geminiResponse = await ai.models.generateContent({ model, contents, config });
                 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -155,7 +166,10 @@ const createWindow = async () => {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: true,
+      // FIX: The sandboxed renderer in Electron has issues with ES Modules in preload scripts.
+      // Disabling the sandbox is a workaround to resolve the "Cannot use import statement outside a module" error.
+      // The most robust solution is to convert Electron scripts to CommonJS (.cjs), but this is a minimal-change fix.
+      sandbox: false,
       preload: path.join(__dirname, 'preload.mjs')
     }
   });

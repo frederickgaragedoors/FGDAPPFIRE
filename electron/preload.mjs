@@ -4,8 +4,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
 contextBridge.exposeInMainWorld('electronAPI', {
-  // This object is now empty after reverting the watch folders feature.
-  // Other Electron APIs can be added here in the future if needed.
+  setGeminiApiKey: (key) => ipcRenderer.send('set-gemini-key', key),
 });
 
 // Minimal preload script
