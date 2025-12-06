@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import { FirebaseUser as User, db } from '../firebase.ts';
 import { doc, onSnapshot, setDoc, collection, writeBatch, getDocs } from 'firebase/firestore';
-import { DefaultFieldSetting, BusinessInfo, JobTemplate, JobStatus, ALL_JOB_STATUSES, EmailSettings, DEFAULT_EMAIL_SETTINGS, CatalogItem, MapSettings, Theme, SavedRouteStop, CategorizationRule } from '../types.ts';
+import { DefaultFieldSetting, BusinessInfo, JobTemplate, JobStatus, ALL_JOB_STATUSES, EmailSettings, DEFAULT_EMAIL_SETTINGS, CatalogItem, MapSettings, AiSettings, Theme, SavedRouteStop, CategorizationRule } from '../types.ts';
 import * as idb from '../db.ts';
 
 export interface AppContextType {
@@ -19,7 +19,8 @@ export interface AppContextType {
     jobTemplates: JobTemplate[];
     partsCatalog: CatalogItem[];
     enabledStatuses: Record<JobStatus, boolean>;
-    mapSettings: MapSettings;
+    mapSettings: MapSettings & { apiKey: string };
+    aiSettings: AiSettings;
     showContactPhotos: boolean;
     routes: Record<string, SavedRouteStop[]>;
     categorizationRules: CategorizationRule[];
@@ -162,11 +163,18 @@ export const AppProvider: React.FC<AppProviderProps> = ({ user, isGuestMode, onS
         apiKey: settings.mapSettings?.apiKey || ((import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY as string) || '',
         homeAddress: settings.mapSettings?.homeAddress || ''
     }), [settings.mapSettings]);
+    const aiSettings = useMemo(() => settings.aiSettings || {}, [settings.aiSettings]);
     const routes = useMemo(() => settings.routes || {}, [settings.routes]);
+
+    useEffect(() => {
+        if ((window as any).electronAPI && aiSettings.geminiApiKey) {
+            (window as any).electronAPI.setGeminiApiKey(aiSettings.geminiApiKey);
+        }
+    }, [aiSettings.geminiApiKey]);
 
     const value: AppContextType = {
         user, isGuestMode, onSwitchToCloud,
-        defaultFields, businessInfo, emailSettings, jobTemplates, partsCatalog, enabledStatuses, mapSettings, showContactPhotos, routes, categorizationRules,
+        defaultFields, businessInfo, emailSettings, jobTemplates, partsCatalog, enabledStatuses, mapSettings, aiSettings, showContactPhotos, routes, categorizationRules,
         theme, isGlobalLoading, globalLoadingMessage,
         settings,
         saveSettings, handleSaveCategorizationRules, setTheme, setIsGlobalLoading, setGlobalLoadingMessage, handleSaveRoute, handleClearRouteForDate
