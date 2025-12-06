@@ -219,8 +219,12 @@ export interface CatalogItem {
 }
 
 export interface MapSettings {
-    apiKey: string;
     homeAddress: string;
+    apiKey?: string;
+}
+
+export interface AiSettings {
+    geminiApiKey?: string;
 }
 
 export type Theme = 'light' | 'dark' | 'system';

@@ -12,12 +12,12 @@ View your app in AI Studio: https://ai.studio/apps/drive/1xJA6rpQZS01dmE8B58TgPs
 
 **Prerequisites:**  Node.js
 
-
 1. Install dependencies:
    `npm install`
-2. Set the `VITE_GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
+2. Run the app:
    `npm run dev`
+
+Your API keys for Gemini and Google Maps should be entered in the app's **Settings** menu for local development.
 
 ## PWA Setup (Important)
 
@@ -27,23 +27,33 @@ To ensure the PWA works correctly on the web and GitHub Pages:
    - New path: `public/icons/icon.svg`
 3. Run `npm install` to install the new PWA plugin.
 
+## Deploying to the Web (Vercel/GitHub Pages)
+
+The Gemini API calls are handled by a secure serverless function.
+1. Push your code to GitHub to trigger the GitHub Action.
+2. In your Vercel project settings, add an Environment Variable named `GEMINI_API_KEY` with your key value.
+3. Once deployed, enter your Google Maps API key in the app's **Settings** menu.
+
 ## Building for Desktop (Electron)
 
+The Electron main process acts as a secure proxy for Gemini API calls. All keys are managed within the app's settings at runtime.
+
 To build the Windows installer:
-`npm run electron:build`
+1. **Run the build command:**
+   `npm run electron:build`
+2. After installing and running the app, go to the **Settings** menu to enter your Gemini and Google Maps API keys.
 
 ### ⚠️ Troubleshooting Build Errors
 
 **Error: `Cannot create symbolic link : A required privilege is not held by the client.`**
 
-This is a permission issue on Windows because the build process needs to create symbolic links for the code signing tools.
+This is a permission issue on Windows.
 
 **Solution:**
 1. **Run as Administrator:**
-   - Close your terminal or VS Code.
+   - Close your terminal/VS Code.
    - Right-click your terminal/VS Code icon and select **"Run as administrator"**.
-   - Navigate back to your project folder.
-   - Run `npm run electron:build` again.
+   - Navigate back to your project folder and run the build command again.
 
 2. **Alternative: Enable Developer Mode**
    - Go to **Windows Settings** > **Update & Security** > **For developers**.
