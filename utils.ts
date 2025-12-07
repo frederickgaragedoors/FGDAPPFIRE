@@ -76,7 +76,16 @@ export const calculateJobTicketTotal = (ticket: Partial<JobTicket> | null) => {
     const feeAmount = totalAfterTaxes * (Number(ticket.processingFeeRate || 0) / 100);
     const totalCost = totalAfterTaxes + feeAmount;
     const deposit = Number(ticket.deposit || 0);
-    const balanceDue = totalCost - deposit;
+    let balanceDue = totalCost - deposit;
+
+    const latestStatusEntry = (ticket.statusHistory && ticket.statusHistory.length > 0)
+        ? [...ticket.statusHistory].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0]
+        : null;
+    const currentStatus = latestStatusEntry ? latestStatusEntry.status : null;
+
+    if (ticket.paymentStatus === 'paid_in_full' || currentStatus === 'Paid') {
+        balanceDue = 0;
+    }
     
     return {
         subtotal,
@@ -84,7 +93,7 @@ export const calculateJobTicketTotal = (ticket: Partial<JobTicket> | null) => {
         feeAmount,
         totalCost,
         deposit,
-        balanceDue
+        balanceDue: Math.max(0, balanceDue)
     };
 };
 
