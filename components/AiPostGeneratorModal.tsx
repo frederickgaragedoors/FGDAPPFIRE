@@ -124,20 +124,20 @@ const AiPostGeneratorModal: React.FC<AiPostGeneratorModalProps> = ({ onClose }) 
                         rows={3}
                     />
 
-                    <div className="flex items-center justify-between mt-4">
+                    <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mt-4">
                         <div className="flex flex-col">
                             <label className="font-semibold mb-2">2. Choose a platform</label>
-                            <div className="flex space-x-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                            <div className="grid grid-cols-3 gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
                                 {(['Facebook', 'Instagram', 'Nextdoor'] as Platform[]).map(p => (
-                                    <button key={p} onClick={() => setPlatform(p)} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${platform === p ? 'bg-white dark:bg-slate-700 text-sky-600 shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}>
+                                    <button key={p} onClick={() => setPlatform(p)} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors text-center ${platform === p ? 'bg-white dark:bg-slate-700 text-sky-600 shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}>
                                         {p}
                                     </button>
                                 ))}
                             </div>
                         </div>
-                        <div className="flex flex-col items-end">
+                        <div className="flex flex-col sm:items-end">
                             <label className="font-semibold mb-2">3. Generate!</label>
-                            <button onClick={handleGenerate} disabled={isLoading} className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium text-white bg-sky-500 hover:bg-sky-600 disabled:bg-sky-300">
+                            <button onClick={handleGenerate} disabled={isLoading} className="flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-medium text-white bg-sky-500 hover:bg-sky-600 disabled:bg-sky-300 w-full sm:w-auto">
                                 <SparklesIcon className="w-5 h-5" />
                                 {isLoading ? 'Generating...' : 'Generate Post'}
                             </button>
