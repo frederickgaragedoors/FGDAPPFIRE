@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useMileage } from '../contexts/MileageContext.tsx';
 import { useContacts } from '../contexts/ContactContext.tsx';
 import { useApp } from '../contexts/AppContext.tsx';
-import { Mileage } from '../types.ts';
+import { Mileage, JobStatus, Contact } from '../types.ts';
 import { CarIcon, PlusIcon, TrashIcon, EditIcon, RefreshIcon, LinkIcon, PencilSquareIcon } from './icons.tsx';
 import { generateId, getLocalDateString, getAppointmentDetailsForDate } from '../utils.ts';
 import EmptyState from './EmptyState.tsx';
@@ -96,37 +96,31 @@ const MileageView: React.FC = () => {
             groups[log.date].push(log);
         });
 
-        // For each group, sort trips chronologically based on job appointment time or creation time.
+        // For each group, sort trips chronologically.
         for (const date in groups) {
             groups[date].sort((a, b) => {
-                const getSortTime = (log: Mileage): string => {
+                // Helper to get an effective timestamp for sorting. Prioritizes scheduled job time, falls back to creation time.
+                const getEffectiveTimestamp = (log: Mileage): number => {
                     if (log.jobId) {
                         for (const contact of contacts) {
                             const ticket = (contact.jobTickets || []).find(t => t.id === log.jobId);
                             if (ticket) {
                                 const appointmentDetails = getAppointmentDetailsForDate(ticket, log.date);
                                 if (appointmentDetails?.time) {
-                                    return appointmentDetails.time; // "HH:MM" format
+                                    // Use the appointment time on the day of the trip.
+                                    return new Date(`${log.date}T${appointmentDetails.time}`).getTime();
                                 }
-                                break;
                             }
                         }
                     }
-                    // Fallback for non-job trips (to home, supplier) or manual trips without a job link.
-                    // Use the time part of createdAt as the best available proxy for trip order.
-                    return new Date(log.createdAt || 0).toTimeString().slice(0, 8); // "HH:MM:SS" format
+                    // Fallback to the creation timestamp if no job or appointment time is found.
+                    return new Date(log.createdAt || 0).getTime();
                 };
 
-                const timeA = getSortTime(a);
-                const timeB = getSortTime(b);
+                const effectiveTimestampA = getEffectiveTimestamp(a);
+                const effectiveTimestampB = getEffectiveTimestamp(b);
 
-                // Primary sort by inferred trip time
-                if (timeA.localeCompare(timeB) !== 0) {
-                    return timeA.localeCompare(timeB);
-                }
-
-                // Secondary sort by creation time as a stable fallback for trips with same inferred time
-                return new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
+                return effectiveTimestampA - effectiveTimestampB;
             });
         }
 
