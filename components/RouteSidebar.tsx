@@ -55,7 +55,7 @@ const RouteSidebar: React.FC<RouteSidebarProps> = ({
                     <div className="flex items-center gap-1">
                         <button onClick={() => onDateChange(getToday())} className="px-2 py-1 text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600">Today</button>
                         <button onClick={() => onDateChange(getTomorrow())} className="px-2 py-1 text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600">Tomorrow</button>
-                        <button onClick={onResyncRoute} className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700" title="Re-sync jobs and re-optimize route"><RefreshIcon className="w-5 h-5"/></button>
+                        <button onClick={onResyncRoute} className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700" title="Re-sync jobs from schedule. Preserves manual stops like supplier runs."><RefreshIcon className="w-5 h-5"/></button>
                     </div>
                 </div>
 
@@ -108,7 +108,6 @@ const RouteSidebar: React.FC<RouteSidebarProps> = ({
                             )}
                             <li>
                                 <div 
-                                    // FIX: Add explicit type casts to resolve TypeScript errors when accessing properties on the 'StopData' union type.
                                     onClick={stop.type === 'job' ? () => onViewJobDetail((stop.data as JobStopData).contactId, (stop.data as JobStopData).id.split('-')[0]) : undefined}
                                     className={`p-3 rounded-lg flex items-start space-x-3 ${stop.type === 'job' ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors' : ''}`}
                                 >
@@ -120,7 +119,6 @@ const RouteSidebar: React.FC<RouteSidebarProps> = ({
                                          <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{stop.data.address}</p>
 
                                         <div className="flex items-center flex-wrap gap-2 mt-1">
-                                            {/* FIX: Add explicit type casts to resolve TypeScript errors when accessing properties on the 'StopData' union type. */}
                                             {stop.type === 'job' && (stop.data as JobStopData).time && (
                                                 <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">Apt: {formatTime((stop.data as JobStopData).time)}</p>
                                             )}
@@ -130,7 +128,6 @@ const RouteSidebar: React.FC<RouteSidebarProps> = ({
                                         </div>
                                     </div>
                                     <div className="w-10 flex-shrink-0 flex flex-col items-center justify-center space-y-2">
-                                        {/* FIX: Add explicit type casts to resolve TypeScript errors when accessing properties on the 'StopData' union type. */}
                                         {(stop.type !== 'home' || (stop.data as HomeStopData).label === 'End') && (
                                             <button
                                                 onClick={(e) => {
