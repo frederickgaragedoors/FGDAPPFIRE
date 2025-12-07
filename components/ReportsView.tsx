@@ -298,7 +298,7 @@ const ReportsView: React.FC = () => {
             <div className="p-4 sm:p-6 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
                 <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                      <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Financial Reports</h1>
-                    <div className="flex items-center space-x-2 p-1 bg-slate-100 dark:bg-slate-900 rounded-lg">
+                    <div className="flex items-center justify-center space-x-2 p-1 bg-slate-100 dark:bg-slate-900 rounded-lg">
                         <ViewTypeButton type="day" label="Daily" />
                         <ViewTypeButton type="week" label="Weekly" />
                         <ViewTypeButton type="month" label="Monthly" />
