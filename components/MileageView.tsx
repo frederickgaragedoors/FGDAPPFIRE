@@ -4,7 +4,7 @@ import { useContacts } from '../contexts/ContactContext.tsx';
 import { useApp } from '../contexts/AppContext.tsx';
 import { Mileage, JobStatus, Contact } from '../types.ts';
 import { CarIcon, PlusIcon, TrashIcon, EditIcon, RefreshIcon, LinkIcon, PencilSquareIcon } from './icons.tsx';
-import { generateId, getLocalDateString, getAppointmentDetailsForDate } from '../utils.ts';
+import { generateId, getLocalDateString, generateRouteStops } from '../utils.ts';
 import EmptyState from './EmptyState.tsx';
 import AddTripModal from './AddTripModal.tsx';
 import ConfirmationModal from './ConfirmationModal.tsx';
@@ -13,7 +13,7 @@ import { useGoogleMaps } from '../hooks/useGoogleMaps.ts';
 const MileageView: React.FC = () => {
     const { mileageLogs, handleSaveMileageLog, handleDeleteMileageLog, syncTripsForDate } = useMileage();
     const { contacts } = useContacts();
-    const { mapSettings, businessInfo, settings } = useApp();
+    const { mapSettings, businessInfo, settings, routes } = useApp();
     const { isLoaded: isMapsLoaded, error: mapsError } = useGoogleMaps(mapSettings.apiKey);
     
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -96,39 +96,54 @@ const MileageView: React.FC = () => {
             groups[log.date].push(log);
         });
 
-        // For each group, sort trips chronologically.
+        // For each group, sort trips to match the route planner's order.
         for (const date in groups) {
-            groups[date].sort((a, b) => {
-                // Helper to get an effective timestamp for sorting. Prioritizes scheduled job time, falls back to creation time.
-                const getEffectiveTimestamp = (log: Mileage): number => {
-                    if (log.jobId) {
-                        for (const contact of contacts) {
-                            const ticket = (contact.jobTickets || []).find(t => t.id === log.jobId);
-                            if (ticket) {
-                                const appointmentDetails = getAppointmentDetailsForDate(ticket, log.date);
-                                if (appointmentDetails?.time) {
-                                    // Use the appointment time on the day of the trip.
-                                    return new Date(`${log.date}T${appointmentDetails.time}`).getTime();
-                                }
-                            }
-                        }
-                    }
-                    // Fallback to the creation timestamp if no job or appointment time is found.
-                    return new Date(log.createdAt || 0).getTime();
-                };
+            const routeForDate = generateRouteStops(date, contacts, mapSettings, businessInfo, routes);
 
-                const effectiveTimestampA = getEffectiveTimestamp(a);
-                const effectiveTimestampB = getEffectiveTimestamp(b);
+            if (routeForDate.length < 2) {
+                // Fallback to creation time if no route is available.
+                groups[date].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+                continue;
+            }
 
-                return effectiveTimestampA - effectiveTimestampB;
-            });
+            const routeLegs = [];
+            for (let i = 0; i < routeForDate.length - 1; i++) {
+                routeLegs.push({
+                    key: `${routeForDate[i].data.address} -> ${routeForDate[i + 1].data.address}`,
+                    used: false
+                });
+            }
+
+            // Pre-sort logs by creation time to handle duplicate legs correctly.
+            const presortedLogs = groups[date].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+            const getSortIndex = (log: Mileage): number => {
+                const logKey = `${log.startAddress} -> ${log.endAddress}`;
+                const routeIndex = routeLegs.findIndex(leg => leg.key === logKey && !leg.used);
+                
+                if (routeIndex !== -1) {
+                    routeLegs[routeIndex].used = true; // Mark as used for the next log
+                    return routeIndex;
+                }
+                
+                // For manually added logs not in the route, place them at the end, sorted by creation time.
+                return Infinity + new Date(log.createdAt).getTime();
+            };
+            
+            const sortedLogs = presortedLogs
+                .map(log => ({ log, sortIndex: getSortIndex(log) }))
+                .sort((a, b) => a.sortIndex - b.sortIndex)
+                .map(item => item.log);
+
+            groups[date] = sortedLogs;
         }
 
         // Sort dates descending to show most recent days first
         const sortedDates = Object.keys(groups).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
         
         return sortedDates.map(date => ({ date, logs: groups[date] }));
-    }, [mileageLogs, contacts]);
+    }, [mileageLogs, contacts, mapSettings, businessInfo, routes]);
+
 
     const summary = useMemo(() => {
         const totalDistance = mileageLogs.reduce((sum, log) => sum + log.distance, 0);
