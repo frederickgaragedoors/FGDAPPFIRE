@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Supplier, Mileage, SavedRouteStop, RouteStop, HomeStopData, JobStopData } from '../types.ts';
+import React, { useState, useEffect } from 'react';
+import { Supplier, SavedRouteStop, RouteStop, HomeStopData, JobStopData, RouteStopType } from '../types.ts';
 import { useApp } from '../contexts/AppContext.tsx';
+import { useContacts } from '../contexts/ContactContext.tsx';
+import { useNotifications } from '../contexts/NotificationContext.tsx';
 import { ArrowLeftIcon, MapPinIcon, XIcon, PlusIcon } from './icons.tsx';
-import { generateId } from '../utils.ts';
+import { generateId, getAppointmentDetailsForDate } from '../utils.ts';
 
 import { useRoutePlanner } from '../hooks/useRoutePlanner.ts';
 import { useRouteMetrics } from '../hooks/useRouteMetrics.ts';
@@ -130,6 +132,8 @@ const getTomorrowDateString = () => {
 
 const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack, onViewJobDetail, initialDate }) => {
     const { mapSettings, businessInfo, handleSaveRoute, handleClearRouteForDate, routes } = useApp();
+    const { contacts } = useContacts();
+    const { addNotification } = useNotifications();
     const { isLoaded: isMapsLoaded, error: mapsError } = useGoogleMaps(mapSettings.apiKey);
     const [selectedDate, setSelectedDate] = useState(initialDate || getLocalDateString(new Date()));
     const [isAddStopModalOpen, setIsAddStopModalOpen] = useState(false);
@@ -142,14 +146,70 @@ const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack, onViewJob
         // Automatically create a snapshot if one doesn't exist for the current view
         if (!routes[selectedDate] && routeStops.length > 1) {
              const simplifiedRoute: SavedRouteStop[] = routeStops.map((stop): SavedRouteStop => {
-                // FIX: Add explicit type casts to resolve TypeScript errors when accessing properties on the 'StopData' union type.
+                // FIX: Use narrowed stop.type to satisfy TypeScript's type inference for RouteStopType. String literals 'job' and 'supplier' were being inferred as `string`.
                 if (stop.type === 'home') return { type: 'home', label: (stop.data as HomeStopData).label };
-                if (stop.type === 'job') return { type: 'job', jobId: (stop.data as JobStopData).id.split('-')[0], contactId: (stop.data as JobStopData).contactId };
-                return { type: 'supplier', supplierId: (stop.data as Supplier).id, id: stop.id };
+                if (stop.type === 'job') return { type: stop.type, jobId: (stop.data as JobStopData).id.split('-')[0], contactId: (stop.data as JobStopData).contactId };
+                return { type: stop.type, supplierId: (stop.data as Supplier).id, id: stop.id };
             });
             handleSaveRoute(selectedDate, simplifiedRoute);
         }
     }, [routeStops, selectedDate, routes, handleSaveRoute]);
+
+    const handleResyncRoute = () => {
+        const savedRoute = routes[selectedDate];
+        if (!savedRoute || savedRoute.length <= 2) {
+            handleClearRouteForDate(selectedDate);
+            addNotification("Route reset to today's jobs.", "info");
+            return;
+        }
+
+        const freshJobsForDate = contacts.flatMap(contact => 
+            (contact.jobTickets || []).flatMap(ticket => {
+                const appointmentDetails = getAppointmentDetailsForDate(ticket, selectedDate);
+                if (appointmentDetails) {
+                    return [{
+                        id: ticket.id,
+                        time: appointmentDetails.time,
+                        contactId: contact.id,
+                    }];
+                }
+                return [];
+            })
+        ).sort((a, b) => (a.time || "23:59").localeCompare(b.time || "23:59"));
+
+        let newRoute: SavedRouteStop[] = [
+            { type: 'home', label: 'Start' },
+            ...freshJobsForDate.map(job => ({ type: 'job' as RouteStopType, jobId: job.id, contactId: job.contactId })),
+            { type: 'home', label: 'End' }
+        ];
+
+        const manualSegments: { anchorJobId: string; segment: SavedRouteStop[] }[] = [];
+        for (let i = 0; i < savedRoute.length; i++) {
+            const currentStop = savedRoute[i];
+            if (currentStop.type === 'supplier') {
+                const anchorStop = savedRoute[i-1];
+                if (anchorStop && anchorStop.type === 'job' && anchorStop.jobId) {
+                    const segment: SavedRouteStop[] = [currentStop];
+                    const nextStop = savedRoute[i+1];
+                    if (nextStop && nextStop.type === 'job' && nextStop.jobId === anchorStop.jobId) {
+                        segment.push(nextStop);
+                        i++;
+                    }
+                    manualSegments.push({ anchorJobId: anchorStop.jobId, segment });
+                }
+            }
+        }
+        
+        for (const { anchorJobId, segment } of manualSegments.reverse()) {
+            const anchorIndex = newRoute.map(s => s.jobId).lastIndexOf(anchorJobId);
+            if (anchorIndex !== -1) {
+                newRoute.splice(anchorIndex + 1, 0, ...segment);
+            }
+        }
+
+        handleSaveRoute(selectedDate, newRoute);
+        addNotification("Route re-synced with latest jobs.", "success");
+    };
 
     const handleDeleteStop = (id: string) => {
         const stopIndex = routeStops.findIndex(stop => stop.id === id);
@@ -174,10 +234,10 @@ const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack, onViewJob
             }
             
             const simplifiedRoute: SavedRouteStop[] = newRoute.map((stop): SavedRouteStop => {
-                // FIX: Add explicit type casts to resolve TypeScript errors when accessing properties on the 'StopData' union type.
+                // FIX: Use narrowed stop.type to satisfy TypeScript's type inference for RouteStopType. String literals 'job' and 'supplier' were being inferred as `string`.
                 if (stop.type === 'home') return { type: 'home', label: (stop.data as HomeStopData).label };
-                if (stop.type === 'job') return { type: 'job', jobId: (stop.data as JobStopData).id.split('-')[0], contactId: (stop.data as JobStopData).contactId };
-                return { type: 'supplier', supplierId: (stop.data as Supplier).id, id: stop.id };
+                if (stop.type === 'job') return { type: stop.type, jobId: (stop.data as JobStopData).id.split('-')[0], contactId: (stop.data as JobStopData).contactId };
+                return { type: stop.type, supplierId: (stop.data as Supplier).id, id: stop.id };
             });
             handleSaveRoute(selectedDate, simplifiedRoute);
         }
@@ -205,10 +265,10 @@ const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack, onViewJob
         }
         
         const simplifiedRoute: SavedRouteStop[] = newStops.map((stop): SavedRouteStop => {
-            // FIX: Add explicit type casts to resolve TypeScript errors when accessing properties on the 'StopData' union type.
+            // FIX: Use narrowed stop.type to satisfy TypeScript's type inference for RouteStopType. String literals 'job' and 'supplier' were being inferred as `string`.
             if (stop.type === 'home') return { type: 'home', label: (stop.data as HomeStopData).label };
-            if (stop.type === 'job') return { type: 'job', jobId: (stop.data as JobStopData).id.split('-')[0], contactId: (stop.data as JobStopData).contactId };
-            return { type: 'supplier', supplierId: (stop.data as Supplier).id, id: stop.id };
+            if (stop.type === 'job') return { type: stop.type, jobId: (stop.data as JobStopData).id.split('-')[0], contactId: (stop.data as JobStopData).contactId };
+            return { type: stop.type, supplierId: (stop.data as Supplier).id, id: stop.id };
         });
         handleSaveRoute(selectedDate, simplifiedRoute);
         setIsAddStopModalOpen(false);
@@ -264,7 +324,7 @@ const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack, onViewJob
             <RouteSidebar
                 selectedDate={selectedDate}
                 onDateChange={setSelectedDate}
-                onResetRoute={() => handleClearRouteForDate(selectedDate)}
+                onResyncRoute={handleResyncRoute}
                 getToday={() => getLocalDateString(new Date())}
                 getTomorrow={getTomorrowDateString}
                 routeStops={routeStops}
