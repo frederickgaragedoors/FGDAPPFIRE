@@ -61,8 +61,26 @@ export interface InspectionItem {
 }
 
 export const DEFAULT_INSPECTION_ITEMS: string[] = [
-    'Photo Eyes', 'Reversing Mechanism', 'Emergency Release', 'Door Balance',
-    'Springs', 'Cables', 'Rollers', 'Hinges', 'Tracks', 'Weather Seal'
+    'Photo Eyes',
+    'Reversing Mechanism',
+    'Emergency Release',
+    'Door Balance',
+    'Springs',
+    'Cables',
+    'Rollers',
+    'Hinges',
+    'Tracks',
+    'Shaft, Drums & Bearings',
+    'Pulleys & Sheaves',
+    'Bottom Fixtures',
+    'Door Panels/Sections',
+    'Weather Seal',
+    'Opener Motor & Drive',
+    'Opener Travel Limits',
+    'Wall Console / Button',
+    'Remotes & Keypad',
+    'Lubrication Status',
+    'Warning Labels'
 ];
 
 export interface SafetyInspection {
