@@ -112,7 +112,7 @@ const AiPostGeneratorModal: React.FC<AiPostGeneratorModalProps> = ({ onClose }) 
                 </div>
             </header>
             
-            <div className="flex-grow flex flex-col md:flex-row overflow-hidden">
+            <div className="flex-grow flex flex-col md:flex-row overflow-y-auto">
                 {/* Left Panel: Controls & Text */}
                 <div className="w-full md:w-1/2 p-6 flex flex-col border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-700">
                     <label className="font-semibold mb-2">1. Describe your post</label>
@@ -150,7 +150,7 @@ const AiPostGeneratorModal: React.FC<AiPostGeneratorModalProps> = ({ onClose }) 
                             value={generatedText}
                             readOnly
                             placeholder="Generated post content will appear here..."
-                            className="w-full h-full p-3 border border-slate-300 dark:border-slate-600 rounded-md bg-slate-50 dark:bg-slate-800 flex-grow resize-none"
+                            className="w-full min-h-[200px] p-3 border border-slate-300 dark:border-slate-600 rounded-md bg-slate-50 dark:bg-slate-800 flex-grow resize-none"
                         />
                         <div className="mt-2 flex justify-end">
                             <button onClick={handleCopy} disabled={!generatedText} className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50">
