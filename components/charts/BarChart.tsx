@@ -26,6 +26,7 @@ export const BarChart: React.FC<BarChartProps> = ({ data }) => {
     const groupMargin = 60;
     const barPadding = 8;
     const numBarsPerGroup = data[0].bars.length;
+    const totalContentWidth = data.length * (groupWidth + groupMargin);
     const barWidth = (groupWidth - (barPadding * (numBarsPerGroup - 1))) / numBarsPerGroup;
 
     return (
@@ -33,9 +34,9 @@ export const BarChart: React.FC<BarChartProps> = ({ data }) => {
             <svg
                 width="100%"
                 height={chartHeight + 50}
+                viewBox={`0 0 ${totalContentWidth} ${chartHeight + 50}`}
                 aria-label="Bar chart showing comparisons"
                 role="img"
-                className="overflow-visible"
             >
                 <g transform="translate(0, 20)">
                     {data.map((group, groupIndex) => {
