@@ -460,9 +460,9 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
                      <form onSubmit={handleBusinessInfoSubmit}>
                         <div className="mt-2 space-y-4">
                             <div className="flex items-center space-x-4">
-                                <div className="w-24 h-24 rounded-full bg-slate-200 dark:bg-slate-700 flex-shrink-0 flex items-center justify-center">
+                                <div className="w-48 h-24 rounded-lg bg-slate-200 dark:bg-slate-700 flex-shrink-0 flex items-center justify-center overflow-hidden border border-slate-300 dark:border-slate-600">
                                     {currentBusinessInfo.logoUrl ? (
-                                        <img src={currentBusinessInfo.logoUrl} alt="Business Logo" className="w-full h-full object-contain rounded-full" />
+                                        <img src={currentBusinessInfo.logoUrl} alt="Business Logo" className="max-w-full max-h-full object-contain" />
                                     ) : (
                                         <UserCircleIcon className="w-16 h-16 text-slate-400 dark:text-slate-500" />
                                     )}
@@ -788,7 +788,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack }) => {
                     <div className="mt-6 border-t dark:border-slate-700 pt-4">
                         {partsCatalog.length > 0 ? (
                             <ul className="space-y-2">
-                                {partsCatalog.map(item => (
+                                {partsCatalog.slice().sort((a, b) => a.name.localeCompare(b.name)).map(item => (
                                     <li key={item.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
                                         <div><span className="font-medium text-slate-700 dark:text-slate-200">{item.name}</span><span className="ml-2 text-sm text-slate-500 dark:text-slate-400">${item.defaultCost.toFixed(2)}</span></div>
                                         <button onClick={() => handleDeleteCatalogItem(item.id)} className="p-2 text-slate-500 dark:text-slate-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-full transition-colors"><TrashIcon className="w-5 h-5" /></button>

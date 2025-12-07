@@ -179,7 +179,7 @@ const QuoteBuilderModal: React.FC<QuoteBuilderModalProps> = ({ contact, quoteId,
                                         <label htmlFor="part-select" className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Quick Add from Catalog</label>
                                         <select id="part-select" onChange={e => { handleQuickAddPart(e.target.value); (e.target as HTMLSelectElement).value = ''; }} className={`mt-1 ${inputStyles}`} value="">
                                             <option value="">Select a part...</option>
-                                            {partsCatalog?.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+                                            {partsCatalog?.slice().sort((a, b) => a.name.localeCompare(b.name)).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
                                         </select>
                                     </div>
 
