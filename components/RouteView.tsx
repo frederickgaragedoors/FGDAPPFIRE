@@ -146,8 +146,7 @@ const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack, onViewJob
         // Automatically create a snapshot if one doesn't exist for the current view
         if (!routes[selectedDate] && routeStops.length > 1) {
              const simplifiedRoute: SavedRouteStop[] = routeStops.map((stop): SavedRouteStop => {
-                // FIX: Use narrowed stop.type to satisfy TypeScript's type inference for RouteStopType. String literals 'job' and 'supplier' were being inferred as `string`.
-                if (stop.type === 'home') return { type: 'home', label: (stop.data as HomeStopData).label };
+                if (stop.type === 'home') return { type: stop.type, label: (stop.data as HomeStopData).label };
                 if (stop.type === 'job') return { type: stop.type, jobId: (stop.data as JobStopData).id.split('-')[0], contactId: (stop.data as JobStopData).contactId };
                 return { type: stop.type, supplierId: (stop.data as Supplier).id, id: stop.id };
             });
@@ -163,19 +162,17 @@ const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack, onViewJob
             return;
         }
 
-        const freshJobsForDate = contacts.flatMap(contact => 
+        const freshJobsForDate = contacts.flatMap(contact =>
             (contact.jobTickets || []).flatMap(ticket => {
                 const appointmentDetails = getAppointmentDetailsForDate(ticket, selectedDate);
                 if (appointmentDetails) {
-                    return [{
-                        id: ticket.id,
-                        time: appointmentDetails.time,
-                        contactId: contact.id,
-                    }];
+                    return [{ id: ticket.id, time: appointmentDetails.time, contactId: contact.id }];
                 }
                 return [];
             })
         ).sort((a, b) => (a.time || "23:59").localeCompare(b.time || "23:59"));
+        
+        const freshJobIds = new Set(freshJobsForDate.map(j => j.id));
 
         let newRoute: SavedRouteStop[] = [
             { type: 'home', label: 'Start' },
@@ -183,27 +180,73 @@ const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack, onViewJob
             { type: 'home', label: 'End' }
         ];
 
-        const manualSegments: { anchorJobId: string; segment: SavedRouteStop[] }[] = [];
+        const manualSegments: { anchorId: string | null; segment: SavedRouteStop[] }[] = [];
         for (let i = 0; i < savedRoute.length; i++) {
             const currentStop = savedRoute[i];
             if (currentStop.type === 'supplier') {
-                const anchorStop = savedRoute[i-1];
-                if (anchorStop && anchorStop.type === 'job' && anchorStop.jobId) {
+                const anchorStop = savedRoute[i - 1];
+                if (!anchorStop) continue;
+
+                let anchorId: string | null = null;
+                if (anchorStop.type === 'job' && anchorStop.jobId) {
+                    anchorId = anchorStop.jobId;
+                } else if (anchorStop.type === 'home' && anchorStop.label === 'Start') {
+                    anchorId = 'start_home';
+                }
+
+                if (anchorId !== null) {
                     const segment: SavedRouteStop[] = [currentStop];
-                    const nextStop = savedRoute[i+1];
-                    if (nextStop && nextStop.type === 'job' && nextStop.jobId === anchorStop.jobId) {
+                    const nextStop = savedRoute[i + 1];
+                    if (anchorStop.type === 'job' && nextStop && nextStop.type === 'job' && nextStop.jobId === anchorStop.jobId) {
                         segment.push(nextStop);
                         i++;
                     }
-                    manualSegments.push({ anchorJobId: anchorStop.jobId, segment });
+                    manualSegments.push({ anchorId, segment });
                 }
             }
         }
-        
-        for (const { anchorJobId, segment } of manualSegments.reverse()) {
-            const anchorIndex = newRoute.map(s => s.jobId).lastIndexOf(anchorJobId);
+
+        for (const { anchorId, segment } of manualSegments.reverse()) {
+            let anchorIndex = -1;
+            if (anchorId === 'start_home') {
+                anchorIndex = 0;
+            } else if (anchorId) {
+                for (let i = newRoute.length - 1; i >= 0; i--) {
+                    if (newRoute[i].jobId === anchorId) {
+                        anchorIndex = i;
+                        break;
+                    }
+                }
+            }
+
             if (anchorIndex !== -1) {
                 newRoute.splice(anchorIndex + 1, 0, ...segment);
+            } else {
+                const oldAnchorIndex = savedRoute.findIndex(s => s.jobId === anchorId);
+                let fallbackAnchorId: string | null = null;
+                for (let i = oldAnchorIndex - 1; i >= 0; i--) {
+                    const potentialAnchor = savedRoute[i];
+                    if (potentialAnchor.type === 'job' && potentialAnchor.jobId && freshJobIds.has(potentialAnchor.jobId)) {
+                        fallbackAnchorId = potentialAnchor.jobId;
+                        break;
+                    }
+                }
+                
+                let fallbackIndex = -1;
+                if (fallbackAnchorId) {
+                     for (let i = newRoute.length - 1; i >= 0; i--) {
+                        if (newRoute[i].jobId === fallbackAnchorId) {
+                            fallbackIndex = i;
+                            break;
+                        }
+                    }
+                }
+
+                if (fallbackIndex !== -1) {
+                    newRoute.splice(fallbackIndex + 1, 0, ...segment);
+                } else {
+                    newRoute.splice(1, 0, ...segment);
+                }
             }
         }
 
@@ -225,7 +268,6 @@ const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack, onViewJob
             if (
                 previousStop?.type === 'job' &&
                 nextStop?.type === 'job' &&
-                // FIX: Add explicit type casts to resolve TypeScript errors when accessing properties on the 'StopData' union type.
                 (previousStop.data as JobStopData).id.split('-')[0] === (nextStop.data as JobStopData).id.split('-')[0]
             ) {
                 newRoute.splice(stopIndex, 2);
@@ -234,8 +276,7 @@ const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack, onViewJob
             }
             
             const simplifiedRoute: SavedRouteStop[] = newRoute.map((stop): SavedRouteStop => {
-                // FIX: Use narrowed stop.type to satisfy TypeScript's type inference for RouteStopType. String literals 'job' and 'supplier' were being inferred as `string`.
-                if (stop.type === 'home') return { type: 'home', label: (stop.data as HomeStopData).label };
+                if (stop.type === 'home') return { type: stop.type, label: (stop.data as HomeStopData).label };
                 if (stop.type === 'job') return { type: stop.type, jobId: (stop.data as JobStopData).id.split('-')[0], contactId: (stop.data as JobStopData).contactId };
                 return { type: stop.type, supplierId: (stop.data as Supplier).id, id: stop.id };
             });
@@ -265,8 +306,7 @@ const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack, onViewJob
         }
         
         const simplifiedRoute: SavedRouteStop[] = newStops.map((stop): SavedRouteStop => {
-            // FIX: Use narrowed stop.type to satisfy TypeScript's type inference for RouteStopType. String literals 'job' and 'supplier' were being inferred as `string`.
-            if (stop.type === 'home') return { type: 'home', label: (stop.data as HomeStopData).label };
+            if (stop.type === 'home') return { type: stop.type, label: (stop.data as HomeStopData).label };
             if (stop.type === 'job') return { type: stop.type, jobId: (stop.data as JobStopData).id.split('-')[0], contactId: (stop.data as JobStopData).contactId };
             return { type: stop.type, supplierId: (stop.data as Supplier).id, id: stop.id };
         });
