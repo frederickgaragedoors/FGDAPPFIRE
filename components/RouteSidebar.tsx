@@ -6,7 +6,7 @@ import { formatTime } from '../utils.ts';
 interface RouteSidebarProps {
     selectedDate: string;
     onDateChange: (date: string) => void;
-    onResetRoute: () => void;
+    onResyncRoute: () => void;
     getToday: () => string;
     getTomorrow: () => string;
     routeStops: RouteStop[];
@@ -35,7 +35,7 @@ const getStopIcon = (stop: RouteStop): { Icon: React.FC<any>, classes: string, b
 };
 
 const RouteSidebar: React.FC<RouteSidebarProps> = ({
-    selectedDate, onDateChange, onResetRoute, getToday, getTomorrow,
+    selectedDate, onDateChange, onResyncRoute, getToday, getTomorrow,
     routeStops, routeMetrics, totalMetrics, leaveByTime,
     onAddStop, onDeleteStop, onViewJobDetail
 }) => {
@@ -55,7 +55,7 @@ const RouteSidebar: React.FC<RouteSidebarProps> = ({
                     <div className="flex items-center gap-1">
                         <button onClick={() => onDateChange(getToday())} className="px-2 py-1 text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600">Today</button>
                         <button onClick={() => onDateChange(getTomorrow())} className="px-2 py-1 text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600">Tomorrow</button>
-                        <button onClick={onResetRoute} className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700" title="Reset to default route"><RefreshIcon className="w-5 h-5"/></button>
+                        <button onClick={onResyncRoute} className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700" title="Re-sync jobs and re-optimize route"><RefreshIcon className="w-5 h-5"/></button>
                     </div>
                 </div>
 
