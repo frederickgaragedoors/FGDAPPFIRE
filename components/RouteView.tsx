@@ -147,7 +147,7 @@ const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack, onViewJob
         if (!routes[selectedDate] && routeStops.length > 1) {
              const simplifiedRoute: SavedRouteStop[] = routeStops.map((stop): SavedRouteStop => {
                 if (stop.type === 'home') return { type: stop.type, label: (stop.data as HomeStopData).label };
-                if (stop.type === 'job') return { type: stop.type, jobId: (stop.data as JobStopData).id.split('-')[0], contactId: (stop.data as JobStopData).contactId };
+                if (stop.type === 'job') return { type: stop.type, jobId: stop.id, contactId: (stop.data as JobStopData).contactId };
                 return { type: stop.type, supplierId: (stop.data as Supplier).id, id: stop.id };
             });
             handleSaveRoute(selectedDate, simplifiedRoute);
@@ -307,7 +307,7 @@ const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack, onViewJob
         
         const simplifiedRoute: SavedRouteStop[] = newStops.map((stop): SavedRouteStop => {
             if (stop.type === 'home') return { type: stop.type, label: (stop.data as HomeStopData).label };
-            if (stop.type === 'job') return { type: stop.type, jobId: (stop.data as JobStopData).id.split('-')[0], contactId: (stop.data as JobStopData).contactId };
+            if (stop.type === 'job') return { type: stop.type, jobId: stop.id, contactId: (stop.data as JobStopData).contactId };
             return { type: stop.type, supplierId: (stop.data as Supplier).id, id: stop.id };
         });
         handleSaveRoute(selectedDate, simplifiedRoute);
