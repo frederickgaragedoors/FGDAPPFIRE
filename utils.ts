@@ -1,4 +1,4 @@
-import { JobTicket, Contact, StatusHistoryEntry, DoorProfile, SafetyInspection, JobStatus, QuoteOption } from './types.ts';
+import { JobTicket, Contact, StatusHistoryEntry, DoorProfile, SafetyInspection, JobStatus, QuoteOption, RouteStop, JobStopData, MapSettings, BusinessInfo, SavedRouteStop, Supplier, HomeStopData } from './types.ts';
 
 /**
  * Generates a short, secure uppercase alphanumeric ID.
@@ -509,4 +509,84 @@ export const getAppointmentDetailsForDate = (ticket: JobTicket, dateString: stri
     }
 
     return { time, date: new Date(`${dateString}T00:00:00`) };
+};
+
+/**
+ * Generates an ordered list of route stops for a given day, matching the logic of the route planner.
+ * @param selectedDate The date in 'YYYY-MM-DD' format.
+ * @param contacts All contacts.
+ * @param mapSettings App's map settings.
+ * @param businessInfo App's business info.
+ * @param routes Saved routes from app state.
+ * @returns An array of ordered RouteStop objects.
+ */
+export const generateRouteStops = (
+    selectedDate: string,
+    contacts: Contact[],
+    mapSettings: MapSettings,
+    businessInfo: BusinessInfo,
+    routes: Record<string, SavedRouteStop[]>
+): RouteStop[] => {
+    if (!mapSettings.homeAddress) return [];
+
+    const jobsForDate = contacts.flatMap(contact =>
+        (contact.jobTickets || []).flatMap(ticket => {
+            const appointmentDetails = getAppointmentDetailsForDate(ticket, selectedDate);
+            if (appointmentDetails) {
+                return [{
+                    ...ticket,
+                    time: appointmentDetails.time,
+                    contactName: contact.name,
+                    contactAddress: contact.address,
+                    contactId: contact.id,
+                    address: ticket.jobLocation || contact.address,
+                } as JobStopData];
+            }
+            return [];
+        })
+    ).sort((a, b) => (a.time || "23:59").localeCompare(b.time || "23:59"));
+    
+    const savedRoute = routes[selectedDate];
+
+    if (savedRoute) {
+        const reconstructedRoute: RouteStop[] = [];
+        savedRoute.forEach((stop, index) => {
+            if (stop.type === 'home') {
+                reconstructedRoute.push({ type: 'home', id: `${stop.label}-${index}`, data: { address: mapSettings.homeAddress, label: stop.label } as HomeStopData });
+            } else if (stop.type === 'job') {
+                const contact = contacts.find(c => c.id === stop.contactId);
+                const ticket = contact?.jobTickets.find(t => t.id === stop.jobId?.split('-')[0]);
+
+                if(ticket && contact) {
+                    const appointmentDetails = getAppointmentDetailsForDate(ticket, selectedDate);
+
+                    const jobData: JobStopData = {
+                        ...ticket,
+                        time: appointmentDetails?.time,
+                        contactName: contact.name,
+                        contactAddress: contact.address,
+                        contactId: contact.id,
+                        address: ticket.jobLocation || contact.address,
+                    };
+                     reconstructedRoute.push({ type: 'job', id: stop.jobId!, data: jobData });
+                }
+            } else if (stop.type === 'supplier') {
+                const supplierData = (businessInfo.suppliers || []).find(s => s.id === stop.supplierId);
+                if (supplierData) {
+                    reconstructedRoute.push({ type: 'supplier', id: stop.id!, data: supplierData });
+                }
+            }
+        });
+        return reconstructedRoute;
+    }
+
+    const start: RouteStop = { type: 'home', id: 'start', data: { address: mapSettings.homeAddress, label: 'Start' } };
+    const end: RouteStop = { type: 'home', id: 'end', data: { address: mapSettings.homeAddress, label: 'End' } };
+    const jobStops: RouteStop[] = jobsForDate.map((job, index) => ({
+        type: 'job',
+        id: `${job.id}-${index}`,
+        data: { ...job, address: job.jobLocation || job.contactAddress },
+    }));
+
+    return [start, ...jobStops, end];
 };
