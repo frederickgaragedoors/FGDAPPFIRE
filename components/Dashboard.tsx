@@ -48,6 +48,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onViewJobDetail }) => {
                 return {
                     ...ticket,
                     status: latestStatusEntry.status,
+                    notes: latestStatusEntry.notes || ticket.notes, // Prefer status notes
                     contactId: contact.id,
                     contactName: contact.name,
                     effectiveDate,

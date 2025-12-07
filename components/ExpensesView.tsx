@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { useFinance } from '../contexts/FinanceContext.tsx';
 import { useApp } from '../contexts/AppContext.tsx';
 import { useNotifications } from '../contexts/NotificationContext.tsx';
@@ -8,7 +8,7 @@ import EmptyState from './EmptyState.tsx';
 import ExpenseFormModal from './ExpenseDetailModal.tsx';
 import ConfirmationModal from './ConfirmationModal.tsx';
 import StatementDetailModal from './StatementDetailModal.tsx';
-import { CurrencyDollarIcon, UploadIcon, LinkIcon, XIcon, TrashIcon } from './icons.tsx';
+import { CurrencyDollarIcon, UploadIcon, LinkIcon, XIcon, TrashIcon, ChevronDownIcon } from './icons.tsx';
 import { fileToDataUrl, generateId, calculateFileHash } from '../utils.ts';
 
 type CombinedTransaction = (Expense & { type: 'expense' }) | (BankTransaction & { type: 'bank' });
@@ -78,9 +78,24 @@ const ExpensesView: React.FC = () => {
     const [matchingTxn, setMatchingTxn] = useState<BankTransaction | null>(null);
     const [statementToDelete, setStatementToDelete] = useState<BankStatement | null>(null);
     const [viewingStatement, setViewingStatement] = useState<BankStatement | null>(null);
+    const [isTabsMenuOpen, setIsTabsMenuOpen] = useState(false);
+    const tabsMenuRef = useRef<HTMLDivElement>(null);
+
 
     const receiptInputRef = useRef<HTMLInputElement>(null);
     const statementInputRef = useRef<HTMLInputElement>(null);
+
+     useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (tabsMenuRef.current && !tabsMenuRef.current.contains(event.target as Node)) {
+                setIsTabsMenuOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, []);
 
     const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files; if (!files || files.length === 0) return;
@@ -335,9 +350,15 @@ const ExpensesView: React.FC = () => {
         </div>
     );
     
-    const TabButton = ({ tab, label }: { tab: string, label: string }) => (
-        <button onClick={() => setActiveTab(tab as any)} className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === tab ? 'bg-sky-500 text-white' : 'text-slate-600 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700'}`}>{label}</button>
-    );
+    const tabItems = [
+        { id: 'overview', label: 'Overview' },
+        { id: 'payables', label: 'Payables' },
+        { id: 'unmatched', label: 'Unmatched' },
+        { id: 'all', label: 'All Transactions' },
+        { id: 'statements', label: 'Statements' },
+    ];
+    
+    const activeTabLabel = tabItems.find(t => t.id === activeTab)?.label || 'Overview';
 
     const StatCard = ({ title, value, subtext, action }: { title: string, value: string, subtext: string, action?: React.ReactNode }) => (
         <div className="p-4 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
@@ -393,12 +414,50 @@ const ExpensesView: React.FC = () => {
                     <EmptyState Icon={CurrencyDollarIcon} title="No Expenses or Transactions" message="Get started by importing receipts or a bank statement." />
                 ) : (
                     <div className="space-y-6">
-                        <div className="flex items-center p-1 bg-slate-200 dark:bg-slate-800 rounded-lg space-x-1">
-                            <TabButton tab="overview" label="Overview" />
-                            <TabButton tab="payables" label="Payables" />
-                            <TabButton tab="unmatched" label="Unmatched" />
-                            <TabButton tab="all" label="All Transactions" />
-                            <TabButton tab="statements" label="Statements" />
+                        {/* Responsive Tab Navigation */}
+                        <div>
+                            {/* Mobile Dropdown */}
+                            <div className="sm:hidden relative" ref={tabsMenuRef}>
+                                <button
+                                    onClick={() => setIsTabsMenuOpen(!isTabsMenuOpen)}
+                                    className="w-full flex justify-between items-center px-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-slate-700 dark:text-slate-200"
+                                >
+                                    <span>{activeTabLabel}</span>
+                                    <ChevronDownIcon className={`w-5 h-5 transition-transform ${isTabsMenuOpen ? 'rotate-180' : ''}`} />
+                                </button>
+                                {isTabsMenuOpen && (
+                                    <div className="absolute top-full mt-1 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-md shadow-lg z-10">
+                                        <ul className="p-1">
+                                            {tabItems.map(item => (
+                                                <li key={item.id}>
+                                                    <button
+                                                        onClick={() => {
+                                                            setActiveTab(item.id as any);
+                                                            setIsTabsMenuOpen(false);
+                                                        }}
+                                                        className={`w-full text-left px-3 py-2 text-sm rounded-md ${activeTab === item.id ? 'bg-sky-50 dark:bg-sky-900/50 text-sky-600 dark:text-sky-300' : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'}`}
+                                                    >
+                                                        {item.label}
+                                                    </button>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Desktop Tabs */}
+                            <div className="hidden sm:flex items-center p-1 bg-slate-200 dark:bg-slate-800 rounded-lg space-x-1 overflow-x-auto">
+                                {tabItems.map(item => (
+                                    <button
+                                        key={item.id}
+                                        onClick={() => setActiveTab(item.id as any)}
+                                        className={`flex-shrink-0 px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === item.id ? 'bg-sky-500 text-white' : 'text-slate-600 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700'}`}
+                                    >
+                                        {item.label}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
 
                         {activeTab === 'overview' && (

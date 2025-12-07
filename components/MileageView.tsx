@@ -126,15 +126,25 @@ const MileageView: React.FC = () => {
                             <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Mileage Tracker</h1>
                             <p className="mt-1 text-slate-500 dark:text-slate-400">Log business-related trips for expense reporting.</p>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="border border-slate-300 dark:border-slate-600 rounded-md px-2 py-1.5 text-sm bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200" />
-                            <button onClick={handleSyncTrips} disabled={isCalculating || !isMapsLoaded} className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 disabled:opacity-50">
-                                <RefreshIcon className={`w-5 h-5 ${isCalculating ? 'animate-spin' : ''}`} />
-                                {isCalculating ? 'Syncing...' : 'Sync with Route'}
-                            </button>
-                            <button onClick={handleNewEntry} className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium text-white bg-sky-500 hover:bg-sky-600">
-                                <PlusIcon className="w-5 h-5" /> Log New Trip
-                            </button>
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-2">
+                            <div className="flex items-center gap-2 order-1 sm:order-2">
+                                <button onClick={handleSyncTrips} disabled={isCalculating || !isMapsLoaded} className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 disabled:opacity-50">
+                                    <RefreshIcon className={`w-5 h-5 ${isCalculating ? 'animate-spin' : ''}`} />
+                                    <span className="sm:hidden">{isCalculating ? 'Syncing...' : 'Sync'}</span>
+                                    <span className="hidden sm:inline">{isCalculating ? 'Syncing...' : 'Sync with Route'}</span>
+                                </button>
+                                <button onClick={handleNewEntry} className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-medium text-white bg-sky-500 hover:bg-sky-600">
+                                    <PlusIcon className="w-5 h-5" />
+                                    <span className="sm:hidden">Log Trip</span>
+                                    <span className="hidden sm:inline">Log New Trip</span>
+                                </button>
+                            </div>
+                            <input 
+                                type="date" 
+                                value={selectedDate} 
+                                onChange={e => setSelectedDate(e.target.value)} 
+                                className="order-2 sm:order-1 w-full sm:w-auto border border-slate-300 dark:border-slate-600 rounded-md px-2 py-1.5 text-sm bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200" 
+                            />
                         </div>
                     </div>
                 </div>

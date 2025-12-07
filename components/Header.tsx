@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ViewState } from '../types.ts';
-import { PlusIcon, SettingsIcon, ClipboardListIcon, UsersIcon, CalendarIcon, MapIcon, CurrencyDollarIcon, ChartBarIcon, CarIcon, MegaphoneIcon } from './icons.tsx';
+import { PlusIcon, SettingsIcon, ClipboardListIcon, UsersIcon, CalendarIcon, MapIcon, CurrencyDollarIcon, ChartBarIcon, CarIcon, MegaphoneIcon, ChevronDownIcon } from './icons.tsx';
 
 interface HeaderProps {
     currentView: ViewState['type'];
@@ -29,6 +29,21 @@ const Header: React.FC<HeaderProps> = ({
     onGoToMileage,
     onGoToSocial,
 }) => {
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const menuRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+                setIsMenuOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, []);
+    
     const isDashboardActive = currentView === 'dashboard';
     const isCalendarActive = currentView === 'calendar';
     const isRouteActive = currentView === 'route';
@@ -37,6 +52,20 @@ const Header: React.FC<HeaderProps> = ({
     const isMileageActive = currentView === 'mileage';
     const isSocialActive = currentView === 'social';
     const isListActive = !isDashboardActive && !isCalendarActive && !isRouteActive && !isExpensesActive && !isReportsActive && !isMileageActive && !isSocialActive && currentView !== 'settings';
+
+    const navItems = [
+        { name: 'Dashboard', icon: ClipboardListIcon, action: onGoToDashboard, active: isDashboardActive },
+        { name: 'Calendar', icon: CalendarIcon, action: onGoToCalendar, active: isCalendarActive },
+        { name: 'Route', icon: MapIcon, action: onGoToRoute, active: isRouteActive },
+        { name: 'Reports', icon: ChartBarIcon, action: onGoToReports, active: isReportsActive },
+        { name: 'Mileage', icon: CarIcon, action: onGoToMileage, active: isMileageActive },
+        { name: 'Expenses', icon: CurrencyDollarIcon, action: onGoToExpenses, active: isExpensesActive },
+        { name: 'Social', icon: MegaphoneIcon, action: onGoToSocial, active: isSocialActive },
+        { name: 'Contacts', icon: UsersIcon, action: onGoToList, active: isListActive },
+    ];
+
+    const activeItem = navItems.find(item => item.active) || navItems[0];
+    const ActiveIcon = activeItem.icon;
 
     const buttonClass = (active: boolean) => 
         `flex items-center space-x-2 px-3 py-1 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
@@ -47,40 +76,49 @@ const Header: React.FC<HeaderProps> = ({
 
     return (
         <header className="px-4 sm:px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center space-x-2 bg-slate-50 dark:bg-slate-800 flex-shrink-0 z-20">
-            <div className="flex items-center space-x-1 p-1 bg-slate-200 dark:bg-slate-900 rounded-lg overflow-x-auto no-scrollbar">
-                <button onClick={onGoToDashboard} className={buttonClass(isDashboardActive)} aria-label="Dashboard">
-                    <ClipboardListIcon className="w-5 h-5" />
-                    <span className="hidden sm:inline">Dashboard</span>
+            
+            {/* Mobile Dropdown Menu */}
+            <div className="relative md:hidden" ref={menuRef}>
+                <button
+                    onClick={() => setIsMenuOpen(!isMenuOpen)}
+                    className="flex items-center space-x-2 px-3 py-2 rounded-lg text-base font-bold bg-slate-200 dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                >
+                    <ActiveIcon className="w-5 h-5 text-sky-500" />
+                    <span>{activeItem.name}</span>
+                    <ChevronDownIcon className={`w-5 h-5 transition-transform ${isMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
-                <button onClick={onGoToCalendar} className={buttonClass(isCalendarActive)} aria-label="Calendar">
-                    <CalendarIcon className="w-5 h-5" />
-                    <span className="hidden sm:inline">Calendar</span>
-                </button>
-                <button onClick={onGoToRoute} className={buttonClass(isRouteActive)} aria-label="Route">
-                    <MapIcon className="w-5 h-5" />
-                    <span className="hidden sm:inline">Route</span>
-                </button>
-                 <button onClick={onGoToReports} className={buttonClass(isReportsActive)} aria-label="Reports">
-                    <ChartBarIcon className="w-5 h-5" />
-                    <span className="hidden sm:inline">Reports</span>
-                </button>
-                <button onClick={onGoToMileage} className={buttonClass(isMileageActive)} aria-label="Mileage">
-                    <CarIcon className="w-5 h-5" />
-                    <span className="hidden sm:inline">Mileage</span>
-                </button>
-                <button onClick={onGoToExpenses} className={buttonClass(isExpensesActive)} aria-label="Expenses">
-                    <CurrencyDollarIcon className="w-5 h-5" />
-                    <span className="hidden sm:inline">Expenses</span>
-                </button>
-                 <button onClick={onGoToSocial} className={buttonClass(isSocialActive)} aria-label="Social Media">
-                    <MegaphoneIcon className="w-5 h-5" />
-                    <span className="hidden sm:inline">Social</span>
-                </button>
-                <button onClick={onGoToList} className={buttonClass(isListActive)} aria-label="Contacts">
-                    <UsersIcon className="w-5 h-5" />
-                    <span className="hidden sm:inline">Contacts</span>
-                </button>
+                {isMenuOpen && (
+                    <div className="absolute top-full mt-2 w-56 bg-white dark:bg-slate-800 rounded-md shadow-lg border border-slate-200 dark:border-slate-700 animate-fadeIn">
+                        <ul className="p-2">
+                            {navItems.map(item => (
+                                <li key={item.name}>
+                                    <button
+                                        onClick={() => {
+                                            item.action();
+                                            setIsMenuOpen(false);
+                                        }}
+                                        className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md text-sm font-medium ${item.active ? 'bg-sky-50 dark:bg-sky-900/50 text-sky-600 dark:text-sky-300' : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'}`}
+                                    >
+                                        <item.icon className={`w-5 h-5 ${item.active ? 'text-sky-500' : 'text-slate-500 dark:text-slate-400'}`} />
+                                        <span>{item.name}</span>
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
             </div>
+
+            {/* Desktop Horizontal Menu */}
+            <div className="hidden md:flex items-center space-x-1 p-1 bg-slate-200 dark:bg-slate-900 rounded-lg overflow-x-auto no-scrollbar">
+                {navItems.map(item => (
+                    <button key={item.name} onClick={item.action} className={buttonClass(item.active)} aria-label={item.name}>
+                        <item.icon className="w-5 h-5" />
+                        <span className="hidden sm:inline">{item.name}</span>
+                    </button>
+                ))}
+            </div>
+
             <div className="flex items-center space-x-2 flex-shrink-0">
                 <button
                     onClick={onGoToSettings}

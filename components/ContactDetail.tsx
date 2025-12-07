@@ -440,7 +440,7 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
                                                         {new Date(ticket.latestTimestamp).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
                                                         {ticketTime && <span className="ml-2 font-medium">{formatTime(ticketTime)}</span>}
                                                     </p>
-                                                    <p className="mt-1 text-sm text-slate-600 dark:text-slate-300 truncate">{ticket.notes}</p>
+                                                    <p className="mt-1 text-sm text-slate-600 dark:text-slate-300 truncate">{latestStatusEntry?.notes || ticket.notes}</p>
                                                 </div>
                                                 <div className="flex items-center space-x-2 flex-shrink-0 self-start">
                                                     <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${paymentColor.base} ${paymentColor.text}`}>{paymentLabel}</span>
