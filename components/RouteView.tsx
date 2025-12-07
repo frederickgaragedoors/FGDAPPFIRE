@@ -260,7 +260,7 @@ const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack, onViewJob
                 </div>
             </div>
         </div>
-        <div className="flex-grow flex flex-col md:flex-row overflow-hidden">
+        <div className="flex-grow flex flex-col md:flex-row md:overflow-hidden">
             <RouteSidebar
                 selectedDate={selectedDate}
                 onDateChange={setSelectedDate}
@@ -275,13 +275,15 @@ const RouteView: React.FC<RouteViewProps> = ({ onGoToSettings, onBack, onViewJob
                 onDeleteStop={handleDeleteStop}
                 onViewJobDetail={onViewJobDetail}
             />
-            {isMapsLoaded ? (
-                <RouteMap routeStops={routeStops} />
-            ) : (
-                <div className="md:w-2/3 lg:w-3/4 h-1/2 md:h-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
-                    <div className="text-slate-500">Loading Map...</div>
-                </div>
-            )}
+            <div className="order-2 md:order-none h-96 md:h-auto md:w-2/3 lg:w-3/4">
+                {isMapsLoaded ? (
+                    <RouteMap routeStops={routeStops} />
+                ) : (
+                    <div className="w-full h-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                        <div className="text-slate-500">Loading Map...</div>
+                    </div>
+                )}
+            </div>
         </div>
       </div>
     );

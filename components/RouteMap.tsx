@@ -92,7 +92,7 @@ const RouteMap: React.FC<RouteMapProps> = ({ routeStops }) => {
     }, [mapLoaded, routeStops]);
 
     return (
-        <div ref={mapRef} className="md:w-2/3 lg:w-3/4 h-1/2 md:h-full bg-slate-200 dark:bg-slate-700">
+        <div ref={mapRef} className="w-full h-full bg-slate-200 dark:bg-slate-700">
             {!mapLoaded && <div className="flex items-center justify-center h-full text-slate-500">Loading Map...</div>}
         </div>
     );

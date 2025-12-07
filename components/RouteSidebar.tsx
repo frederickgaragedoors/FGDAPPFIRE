@@ -48,31 +48,33 @@ const RouteSidebar: React.FC<RouteSidebarProps> = ({
     const travelTimeLabel = isFutureDate ? " (in traffic)" : "";
 
     return (
-        <div className="md:w-1/3 lg:w-1/4 h-1/2 md:h-full flex flex-col border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
-            <div className="p-4 flex items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-700">
-                <input type="date" value={selectedDate} onChange={e => onDateChange(e.target.value)} className="border border-slate-300 dark:border-slate-600 rounded-md px-2 py-1.5 text-sm bg-white dark:bg-slate-700"/>
-                <div className="flex items-center gap-1">
-                    <button onClick={() => onDateChange(getToday())} className="px-2 py-1 text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600">Today</button>
-                    <button onClick={() => onDateChange(getTomorrow())} className="px-2 py-1 text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600">Tomorrow</button>
-                    <button onClick={onResetRoute} className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700" title="Reset to default route"><RefreshIcon className="w-5 h-5"/></button>
+        <div className="contents md:flex md:w-1/3 lg:w-1/4 md:h-full md:flex-col md:border-r md:border-slate-200 md:dark:border-slate-700 md:bg-white md:dark:bg-slate-800">
+            <div className="order-1 md:order-none bg-white dark:bg-slate-800">
+                <div className="p-4 flex items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-700">
+                    <input type="date" value={selectedDate} onChange={e => onDateChange(e.target.value)} className="border border-slate-300 dark:border-slate-600 rounded-md px-2 py-1.5 text-sm bg-white dark:bg-slate-700"/>
+                    <div className="flex items-center gap-1">
+                        <button onClick={() => onDateChange(getToday())} className="px-2 py-1 text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600">Today</button>
+                        <button onClick={() => onDateChange(getTomorrow())} className="px-2 py-1 text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600">Tomorrow</button>
+                        <button onClick={onResetRoute} className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700" title="Reset to default route"><RefreshIcon className="w-5 h-5"/></button>
+                    </div>
+                </div>
+
+                <div className="p-4 border-b border-slate-200 dark:border-slate-700">
+                    <h2 className="font-semibold">Route for {new Date(selectedDate + 'T00:00:00').toLocaleDateString()}</h2>
+                    <div className="flex justify-between items-center mt-2 text-sm text-slate-500 dark:text-slate-400">
+                        <span>Total: {(totalMetrics.distance * 0.000621371).toFixed(1)} mi</span>
+                        <span>{totalDriveLabel}: {Math.round(totalMetrics.time / 60)} min</span>
+                    </div>
+                    {leaveByTime && (
+                        <div className="mt-3 p-2 text-center bg-sky-50 dark:bg-sky-900/50 border border-sky-200 dark:border-sky-800 rounded-md">
+                        <p className="text-sm font-semibold text-sky-800 dark:text-sky-200">
+                                Leave home by <span className="text-lg">{leaveByTime}</span>
+                            </p>
+                        </div>
+                    )}
                 </div>
             </div>
-
-            <div className="p-4 border-b border-slate-200 dark:border-slate-700">
-                 <h2 className="font-semibold">Route for {new Date(selectedDate + 'T00:00:00').toLocaleDateString()}</h2>
-                 <div className="flex justify-between items-center mt-2 text-sm text-slate-500 dark:text-slate-400">
-                    <span>Total: {(totalMetrics.distance * 0.000621371).toFixed(1)} mi</span>
-                    <span>{totalDriveLabel}: {Math.round(totalMetrics.time / 60)} min</span>
-                 </div>
-                 {leaveByTime && (
-                    <div className="mt-3 p-2 text-center bg-sky-50 dark:bg-sky-900/50 border border-sky-200 dark:border-sky-800 rounded-md">
-                       <p className="text-sm font-semibold text-sky-800 dark:text-sky-200">
-                            Leave home by <span className="text-lg">{leaveByTime}</span>
-                        </p>
-                    </div>
-                 )}
-            </div>
-            <ul className="flex-grow overflow-y-auto p-4">
+            <ul className="order-3 md:order-none md:flex-grow md:overflow-y-auto p-4 bg-white dark:bg-slate-800">
                 {routeStops.map((stop, index) => {
                     const metrics = routeMetrics[stop.id];
                     const { Icon, classes, bg } = getStopIcon(stop);
