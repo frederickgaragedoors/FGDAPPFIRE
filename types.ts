@@ -136,6 +136,11 @@ export interface DoorProfile {
     doorInstallDate: string;
     springInstallDate: string;
     openerInstallDate: string;
+    doorBrand?: string;
+    doorModel?: string;
+    doorColor?: string;
+    doorPanelStyle?: string;
+    doorNotes?: string;
 }
 
 export interface QuoteOption {
