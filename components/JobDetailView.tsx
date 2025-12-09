@@ -87,7 +87,7 @@ const JobDetailView: React.FC<JobDetailViewProps> = ({
         );
   }
 
-  const { totalCost, balanceDue } = calculateJobTicketTotal(ticket);
+  const { subtotal, taxAmount, feeAmount, totalCost, balanceDue } = calculateJobTicketTotal(ticket);
   const paymentColor = paymentStatusColors[ticket.paymentStatus || 'unpaid'];
   const paymentLabel = paymentStatusLabels[ticket.paymentStatus || 'unpaid'];
   
@@ -257,12 +257,83 @@ const JobDetailView: React.FC<JobDetailViewProps> = ({
                   {/* Right Column: Financial & Inspections */}
                   <div className="space-y-6">
                       <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
-                          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">Financial Summary</h2>
-                           <div className="space-y-2">
-                                <div className="flex justify-between text-sm"><span className="text-slate-500 dark:text-slate-400">Total</span><span className="font-semibold">${totalCost.toFixed(2)}</span></div>
-                                <div className="flex justify-between text-sm"><span className="text-slate-500 dark:text-slate-400">Deposit Paid</span><span className="font-semibold">${(ticket.deposit || 0).toFixed(2)}</span></div>
-                                <div className="flex justify-between text-lg pt-2 border-t border-slate-200 dark:border-slate-700"><span className="font-bold text-slate-800 dark:text-slate-100">Balance Due</span><span className="font-bold">${balanceDue.toFixed(2)}</span></div>
-                           </div>
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center">
+                                    <CurrencyDollarIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                </div>
+                                <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Financial Summary</h2>
+                            </div>
+                           
+                            <div className="space-y-2 text-sm border-b border-slate-200 dark:border-slate-700 pb-3 mb-3">
+                                {(ticket.parts.length > 0 || ticket.laborCost > 0) ? (
+                                    <>
+                                        {ticket.parts.map(part => (
+                                            <div key={part.id} className="flex justify-between items-center">
+                                                <span className="text-slate-600 dark:text-slate-300 truncate pr-2" title={part.name}>
+                                                    {part.quantity > 1 && <span className="font-semibold">{part.quantity}x </span>}{part.name}
+                                                </span>
+                                                <span className="font-medium text-slate-700 dark:text-slate-200 whitespace-nowrap">${(part.cost * part.quantity).toFixed(2)}</span>
+                                            </div>
+                                        ))}
+                                        {ticket.laborCost > 0 && (
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-slate-600 dark:text-slate-300">Labor</span>
+                                                <span className="font-medium text-slate-700 dark:text-slate-200">${ticket.laborCost.toFixed(2)}</span>
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    <p className="text-sm text-slate-400 italic text-center py-2">No line items for this job.</p>
+                                )}
+                            </div>
+
+                           <div className="space-y-2 text-sm">
+                                <div className="flex justify-between">
+                                    <span className="text-slate-500 dark:text-slate-400">Subtotal</span>
+                                    <span className="font-semibold">${subtotal.toFixed(2)}</span>
+                                </div>
+                                {taxAmount > 0 && (
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500 dark:text-slate-400">Sales Tax ({ticket.salesTaxRate}%)</span>
+                                        <span className="font-semibold">${taxAmount.toFixed(2)}</span>
+                                    </div>
+                                )}
+                                {feeAmount > 0 && (
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500 dark:text-slate-400">Card Fee ({ticket.processingFeeRate}%)</span>
+                                        <span className="font-semibold">${feeAmount.toFixed(2)}</span>
+                                    </div>
+                                )}
+                                <div className="flex justify-between text-base pt-2 border-t border-slate-200 dark:border-slate-700 mt-2">
+                                    <span className="font-bold text-slate-800 dark:text-slate-100">Total</span>
+                                    <span className="font-bold">${totalCost.toFixed(2)}</span>
+                                </div>
+
+                                {ticket.paymentStatus === 'paid_in_full' ? (
+                                    <>
+                                        {ticket.deposit > 0 && (
+                                            <div className="flex justify-between text-sm">
+                                                <span className="text-slate-500 dark:text-slate-400">Deposit Paid</span>
+                                                <span className="font-semibold text-green-600">-${(ticket.deposit || 0).toFixed(2)}</span>
+                                            </div>
+                                        )}
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-slate-500 dark:text-slate-400">{ticket.deposit > 0 ? 'Balance Paid' : 'Amount Paid'}</span>
+                                            <span className="font-semibold text-green-600">-${(totalCost - (ticket.deposit || 0)).toFixed(2)}</span>
+                                        </div>
+                                    </>
+                                ) : ticket.deposit > 0 ? (
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-slate-500 dark:text-slate-400">Deposit Paid</span>
+                                        <span className="font-semibold text-green-600">-${(ticket.deposit || 0).toFixed(2)}</span>
+                                    </div>
+                                ) : null}
+
+                                <div className="flex justify-between text-lg pt-2 border-t border-slate-200 dark:border-slate-700 mt-2">
+                                    <span className="font-bold text-slate-800 dark:text-slate-100">Balance Due</span>
+                                    <span className="font-bold">${balanceDue.toFixed(2)}</span>
+                                </div>
+                            </div>
                            <div className="mt-4 flex flex-col gap-2">
                                 <span className={`w-full text-center px-2 py-1 text-sm font-medium rounded-full ${paymentColor.base} ${paymentColor.text}`}>{paymentLabel}</span>
                                 <button onClick={onViewInvoice} className="w-full mt-2 text-center px-4 py-2 bg-sky-500 text-white rounded-md hover:bg-sky-600 font-medium text-sm transition-colors">View Invoice / Estimate</button>

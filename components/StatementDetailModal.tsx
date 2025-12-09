@@ -13,9 +13,12 @@ const StatementDetailModal: React.FC<StatementDetailModalProps> = ({ statement, 
     const [searchTerm, setSearchTerm] = useState('');
 
     const filteredTransactions = useMemo(() => {
-        if (!searchTerm) return transactions;
+        const sortedTransactions = [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        if (!searchTerm) return sortedTransactions;
+
         const lowercasedFilter = searchTerm.toLowerCase();
-        return transactions.filter(transaction =>
+        return sortedTransactions.filter(transaction =>
             transaction.description.toLowerCase().includes(lowercasedFilter)
         );
     }, [searchTerm, transactions]);

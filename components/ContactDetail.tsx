@@ -291,7 +291,7 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
                 <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 md:hidden">
                     <ArrowLeftIcon className="w-6 h-6 text-slate-600 dark:text-slate-300" />
                 </button>
-                <div className="flex-grow flex items-center space-x-3 ml-4">
+                <div className="flex-grow flex items-center space-x-3 ml-4 min-w-0">
                     <h2 className="font-bold text-lg text-slate-800 dark:text-slate-100 truncate">{contact.name}</h2>
                     <button onClick={() => handleTogglePinContact(contact.id)} className="text-slate-400 hover:text-amber-500 transition-colors">
                         {contact.isPinned ? <PinSolidIcon className="w-5 h-5 text-amber-500" /> : <PinIcon className="w-5 h-5" />}
@@ -382,12 +382,12 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
 
             <div className="px-4 sm:px-6">
                 <div className="border-b border-slate-200 dark:border-slate-700">
-                    <nav className="-mb-px flex space-x-6" aria-label="Tabs">
+                    <nav className="-mb-px flex justify-between sm:justify-start sm:space-x-6 overflow-x-auto no-scrollbar" aria-label="Tabs">
                         {[
-                            ['details', 'Job Tickets'], 
+                            ['details', 'Jobs'], 
                             ['quotes', 'Quotes'],
-                            ['profiles', 'Door Profiles'], 
-                            ['files', 'Attachments']
+                            ['profiles', 'Profiles'], 
+                            ['files', 'Files']
                         ].map(([id, name]) => (
                             <button key={id} onClick={() => setActiveTab(id as any)} className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === id ? 'border-sky-500 text-sky-600 dark:text-sky-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600'}`}>
                                 {name}
@@ -401,7 +401,7 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
                 {activeTab === 'details' && (
                     <div className="space-y-4">
                         <div className="flex justify-between items-center">
-                            <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Job Tickets ({sortedJobTickets.length})</h3>
+                            <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Jobs ({sortedJobTickets.length})</h3>
                             <button onClick={() => { setEditingJobTicket(null); setJobModalKey(Date.now()); setIsJobTicketModalOpen(true); }} className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium text-white bg-sky-500 hover:bg-sky-600">
                                 <PlusIcon className="w-4 h-4" />
                                 <span>Add Job</span>
@@ -519,27 +519,57 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
                 )}
                 {activeTab === 'profiles' && (
                     <div className="space-y-4">
-                         <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Door & System Profiles</h3>
+                         <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Profiles</h3>
                          {normalizedDoorProfiles.length > 0 ? (
-                             <div className="space-y-6">
+                            <div className="space-y-6">
                                 {normalizedDoorProfiles.map((p, idx) => (
                                     <div key={p.id} className="p-4 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
                                         <h4 className="font-semibold text-slate-700 dark:text-slate-200 mb-4">{`System ${idx + 1}`}</h4>
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                            <div><p className="text-xs font-bold text-slate-500 uppercase">Dimensions</p><p className="mt-1">{p.dimensions || '---'}</p></div>
-                                            <div><p className="text-xs font-bold text-slate-500 uppercase">Door Type</p><p className="mt-1">{p.doorType || '---'}</p></div>
-                                            <div><p className="text-xs font-bold text-slate-500 uppercase">Spring System</p><p className="mt-1">{p.springSystem || '---'}</p></div>
-                                            <div><p className="text-xs font-bold text-slate-500 uppercase"># Springs</p><p className="mt-1">{p.springs?.length || 0}</p></div>
-                                            <div className="col-span-2 md:col-span-4"><p className="text-xs font-bold text-slate-500 uppercase">Spring Sizes</p><p className="mt-1">{p.springs?.map(s => s.size).join(', ') || '---'}</p></div>
-                                            <div><p className="text-xs font-bold text-slate-500 uppercase">Opener Brand</p><p className="mt-1">{p.openerBrand || '---'}</p></div>
-                                            <div><p className="text-xs font-bold text-slate-500 uppercase">Opener Model</p><p className="mt-1">{p.openerModel || '---'}</p></div>
-                                            <div><p className="text-xs font-bold text-slate-500 uppercase">Door Install</p><p className="mt-1">{formatInstallDate(p.doorInstallDate)}</p></div>
-                                            <div><p className="text-xs font-bold text-slate-500 uppercase">Spring Install</p><p className="mt-1">{formatInstallDate(p.springInstallDate)}</p></div>
-                                            <div><p className="text-xs font-bold text-slate-500 uppercase">Opener Install</p><p className="mt-1">{formatInstallDate(p.openerInstallDate)}</p></div>
+                                        <div className="space-y-4">
+                                            {/* Door Info */}
+                                            <div>
+                                                <h5 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 border-b dark:border-slate-600 pb-1">Door Information</h5>
+                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mt-2">
+                                                    <div><p className="text-xs font-bold text-slate-500 uppercase">Brand</p><p className="mt-1">{p.doorBrand || '---'}</p></div>
+                                                    <div><p className="text-xs font-bold text-slate-500 uppercase">Model</p><p className="mt-1">{p.doorModel || '---'}</p></div>
+                                                    <div><p className="text-xs font-bold text-slate-500 uppercase">Color</p><p className="mt-1">{p.doorColor || '---'}</p></div>
+                                                    <div><p className="text-xs font-bold text-slate-500 uppercase">Panel Style</p><p className="mt-1">{p.doorPanelStyle || '---'}</p></div>
+                                                    <div><p className="text-xs font-bold text-slate-500 uppercase">Dimensions</p><p className="mt-1">{p.dimensions || '---'}</p></div>
+                                                    <div><p className="text-xs font-bold text-slate-500 uppercase">Door Type</p><p className="mt-1">{p.doorType || '---'}</p></div>
+                                                    <div><p className="text-xs font-bold text-slate-500 uppercase">Install Date</p><p className="mt-1">{formatInstallDate(p.doorInstallDate)}</p></div>
+                                                </div>
+                                                {p.doorNotes && (
+                                                    <div className="mt-3">
+                                                        <p className="text-xs font-bold text-slate-500 uppercase">Notes</p>
+                                                        <p className="mt-1 text-sm whitespace-pre-wrap bg-slate-50 dark:bg-slate-700/50 p-2 rounded-md">{p.doorNotes}</p>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Spring Info */}
+                                            <div>
+                                                <h5 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 border-b dark:border-slate-600 pb-1">Spring System</h5>
+                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mt-2">
+                                                    <div><p className="text-xs font-bold text-slate-500 uppercase">System Type</p><p className="mt-1">{p.springSystem || '---'}</p></div>
+                                                    <div><p className="text-xs font-bold text-slate-500 uppercase"># Springs</p><p className="mt-1">{p.springs?.length || 0}</p></div>
+                                                    <div className="col-span-2"><p className="text-xs font-bold text-slate-500 uppercase">Spring Sizes</p><p className="mt-1">{p.springs?.map(s => s.size).join(', ') || '---'}</p></div>
+                                                    <div><p className="text-xs font-bold text-slate-500 uppercase">Install Date</p><p className="mt-1">{formatInstallDate(p.springInstallDate)}</p></div>
+                                                </div>
+                                            </div>
+
+                                            {/* Opener Info */}
+                                            <div>
+                                                <h5 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 border-b dark:border-slate-600 pb-1">Opener System</h5>
+                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mt-2">
+                                                    <div><p className="text-xs font-bold text-slate-500 uppercase">Opener Brand</p><p className="mt-1">{p.openerBrand || '---'}</p></div>
+                                                    <div><p className="text-xs font-bold text-slate-500 uppercase">Opener Model</p><p className="mt-1">{p.openerModel || '---'}</p></div>
+                                                    <div><p className="text-xs font-bold text-slate-500 uppercase">Install Date</p><p className="mt-1">{formatInstallDate(p.openerInstallDate)}</p></div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
-                             </div>
+                            </div>
                          ) : (
                             <EmptyState 
                                 Icon={HomeIcon} 
@@ -554,7 +584,7 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
                 {activeTab === 'files' && (
                     <div className="space-y-6">
                         <div className="flex justify-between items-center">
-                            <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Attachments</h3>
+                            <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Files</h3>
                              <button onClick={() => fileUploadRef.current?.click()} className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium text-white bg-sky-500 hover:bg-sky-600">
                                 <PlusIcon className="w-4 h-4" /><span>Add File</span>
                             </button>
@@ -592,7 +622,7 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
                             </div>
                         )}
                          {imageFiles.length === 0 && otherFiles.length === 0 && (
-                            <EmptyState Icon={FileIcon} title="No Attachments" message="Upload photos, PDFs, or other documents related to this contact."/>
+                            <EmptyState Icon={FileIcon} title="No Files" message="Upload photos, PDFs, or other documents related to this contact."/>
                         )}
                     </div>
                 )}

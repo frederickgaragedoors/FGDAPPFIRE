@@ -57,13 +57,19 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onCancel, ini
             doorInstallDate: p.doorInstallDate || 'Unknown',
             springInstallDate: p.springInstallDate || 'Unknown',
             openerInstallDate: p.openerInstallDate || 'Unknown',
-            springs: p.springs && p.springs.length > 0 ? p.springs : [{ id: generateId(), size: '' }]
+            springs: p.springs && p.springs.length > 0 ? p.springs : [{ id: generateId(), size: '' }],
+            doorBrand: p.doorBrand || '',
+            doorModel: p.doorModel || '',
+            doorColor: p.doorColor || '',
+            doorPanelStyle: p.doorPanelStyle || '',
+            doorNotes: p.doorNotes || '',
         })));
     } else {
         setDoorProfiles([{
             id: generateId(), dimensions: '', doorType: '', springSystem: '',
             springs: [{ id: generateId(), size: '' }], openerBrand: '', openerModel: '',
-            doorInstallDate: 'Unknown', springInstallDate: 'Unknown', openerInstallDate: 'Unknown'
+            doorInstallDate: 'Unknown', springInstallDate: 'Unknown', openerInstallDate: 'Unknown',
+            doorBrand: '', doorModel: '', doorColor: '', doorPanelStyle: '', doorNotes: '',
         }]);
     }
   }, [initialContact, defaultFields]);
@@ -191,7 +197,12 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onCancel, ini
         openerModel: '',
         doorInstallDate: 'Unknown',
         springInstallDate: 'Unknown',
-        openerInstallDate: 'Unknown'
+        openerInstallDate: 'Unknown',
+        doorBrand: '',
+        doorModel: '',
+        doorColor: '',
+        doorPanelStyle: '',
+        doorNotes: '',
       }]);
   };
 
@@ -232,7 +243,7 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onCancel, ini
     }));
 
     const finalDoorProfiles = processedProfiles.filter(p => 
-        p.dimensions || p.doorType || p.springSystem || p.openerBrand || p.openerModel
+        p.dimensions || p.doorType || p.springSystem || p.openerBrand || p.openerModel || p.doorBrand || p.doorModel || p.doorColor || p.doorPanelStyle || p.doorNotes
     );
 
     const contactData = { 
@@ -455,6 +466,26 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onCancel, ini
                                             <option value="Rolling Steel">Rolling Steel</option>
                                             <option value="Other">Other</option>
                                         </select>
+                                    </div>
+                                     <div>
+                                        <label className={labelClass}>Door Brand</label>
+                                        <input type="text" placeholder="e.g. Clopay" value={profile.doorBrand || ''} onChange={e => handleDoorProfileChange(profile.id, 'doorBrand', e.target.value)} className={inputClass} />
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Door Model</label>
+                                        <input type="text" placeholder="e.g. Gallery" value={profile.doorModel || ''} onChange={e => handleDoorProfileChange(profile.id, 'doorModel', e.target.value)} className={inputClass} />
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Color</label>
+                                        <input type="text" placeholder="e.g. White" value={profile.doorColor || ''} onChange={e => handleDoorProfileChange(profile.id, 'doorColor', e.target.value)} className={inputClass} />
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Panel Style</label>
+                                        <input type="text" placeholder="e.g. Long Panel" value={profile.doorPanelStyle || ''} onChange={e => handleDoorProfileChange(profile.id, 'doorPanelStyle', e.target.value)} className={inputClass} />
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                        <label className={labelClass}>Door Notes</label>
+                                        <textarea rows={2} placeholder="e.g. Top panel has a small dent." value={profile.doorNotes || ''} onChange={e => handleDoorProfileChange(profile.id, 'doorNotes', e.target.value)} className={inputClass}></textarea>
                                     </div>
                                     <div className="sm:col-span-2">
                                         {renderDateInput("Door Install Date", profile.id, 'doorInstallDate', profile.doorInstallDate)}
