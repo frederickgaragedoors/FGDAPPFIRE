@@ -115,11 +115,9 @@ export const ContactProvider: React.FC<ContactProviderProps> = ({ children }) =>
         const contactId = contactData.id || generateId(); const now = new Date().toISOString();
         let finalPhotoUrl = contactData.photoUrl; let finalFiles = [...(contactData.files || [])];
         
-        if (!contactData.id && contactData.jobTickets && contactData.jobTickets.length > 0) {
-            const datesToClear = new Set<string>();
-            contactData.jobTickets.forEach(ticket => { (ticket.statusHistory || []).forEach(h => datesToClear.add(h.timestamp.split('T')[0])); });
-            datesToClear.forEach(date => handleClearRouteForDate(date));
-        }
+        // BUGFIX: Removed automatic route deletion on new contact creation to prevent data loss.
+        // The previous logic would clear any manually created route (e.g., with only supplier stops)
+        // when a new contact with a job was created for that same day.
         const newContact = { ...contactData, id: contactId, lastModified: now } as Contact;
         if (isGuestMode) {
             await idb.putItem(idb.CONTACTS_STORE, newContact);
@@ -208,14 +206,11 @@ export const ContactProvider: React.FC<ContactProviderProps> = ({ children }) =>
                 updatedTickets = [...contact.jobTickets, { ...ticketData, id: generateId(), createdAt: new Date().toISOString() } as JobTicket];
             }
         }
-        const datesToClear = new Set<string>();
-        updatedTickets.forEach(ticket => {
-            (ticket.statusHistory || (ticket.createdAt ? [{timestamp: ticket.createdAt}] : [])).forEach(h => datesToClear.add(h.timestamp.split('T')[0]));
-        });
-        (contact.jobTickets || []).forEach(ticket => {
-            (ticket.statusHistory || (ticket.createdAt ? [{timestamp: ticket.createdAt}] : [])).forEach(h => datesToClear.add(h.timestamp.split('T')[0]));
-        });
-        datesToClear.forEach(date => handleClearRouteForDate(date));
+        
+        // BUGFIX: Removed automatic route deletion logic. Previously, saving a job ticket would
+        // aggressively clear any saved route for that day, causing manually added stops (like
+        // supplier runs) to disappear. Now, saved routes are preserved, and any necessary
+        // route updates must be initiated by the user via the "Sync" button in the Route Planner.
 
         const updatedContact = { ...contact, jobTickets: updatedTickets, lastModified: new Date().toISOString() };
         setContacts(prev => prev.map(c => c.id === contactId ? updatedContact : c));
