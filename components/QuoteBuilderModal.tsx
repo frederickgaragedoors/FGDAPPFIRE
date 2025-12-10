@@ -122,7 +122,7 @@ const QuoteBuilderModal: React.FC<QuoteBuilderModalProps> = ({ contact, quoteId,
                     </div>
                 </header>
 
-                <div className="flex-grow flex flex-col md:flex-row overflow-hidden">
+                <div className="flex-grow flex flex-col md:flex-row overflow-y-auto md:overflow-hidden">
                     {/* Left Panel: Options List */}
                     <div className="w-full md:w-64 flex-shrink-0 border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex flex-col">
                          <div className="p-4">
@@ -145,7 +145,7 @@ const QuoteBuilderModal: React.FC<QuoteBuilderModalProps> = ({ contact, quoteId,
                                 <PlusIcon className="w-4 h-4" /> Add Option
                             </button>
                         </div>
-                        <ul className="flex-grow overflow-y-auto p-2">
+                        <ul className="overflow-y-auto p-2 max-h-48 md:max-h-full md:flex-grow">
                             {options.map(option => (
                                 <li key={option.id}>
                                     <button
@@ -167,7 +167,7 @@ const QuoteBuilderModal: React.FC<QuoteBuilderModalProps> = ({ contact, quoteId,
 
                     {/* Right Panel: Option Details */}
                     {activeOption && (
-                        <div className="flex-grow p-6 overflow-y-auto space-y-6">
+                        <div className="flex-grow p-6 md:overflow-y-auto space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label htmlFor="option-name" className={labelStyles}>Option Name</label>
