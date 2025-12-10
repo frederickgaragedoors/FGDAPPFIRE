@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Contact, Quote, QuoteOption, JobTicket } from '../types.ts';
 import { useContacts } from '../contexts/ContactContext.tsx';
 import { useApp } from '../contexts/AppContext.tsx';
-import { ArrowLeftIcon, MailIcon, ShareIcon, PrinterIcon, DownloadIcon, CheckCircleIcon } from './icons.tsx';
+import { ArrowLeftIcon, MailIcon, ShareIcon, PrinterIcon, DownloadIcon, CheckCircleIcon, FileIcon } from './icons.tsx';
 import { generateId, fileToDataUrl } from '../utils.ts';
 import { generateQuotePdf } from '../services/quotePdfGenerator.ts';
 import ConfirmationModal from './ConfirmationModal.tsx';
@@ -141,15 +141,38 @@ const QuoteView: React.FC<QuoteViewProps> = ({ contactId, quoteId, onClose }) =>
                     </div>
                 </div>
 
-                <div className="p-4 md:p-8 flex-grow">
+                <div className="p-4 md:p-8 flex-grow flex flex-col items-center">
                      {pdfUrl ? (
-                        <iframe src={pdfUrl} className="w-full h-full bg-white shadow-lg" title="Quote Preview" />
+                        <div className="w-full flex-grow bg-white shadow-lg rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 relative min-h-[500px]">
+                            {/* Desktop: Iframe */}
+                            <iframe src={pdfUrl} className="w-full h-full hidden md:block" title="Quote Preview" />
+                            
+                            {/* Mobile: Native Open Button */}
+                            <div className="md:hidden w-full h-full flex flex-col items-center justify-center p-8 text-center space-y-6 bg-slate-50 dark:bg-slate-800 absolute inset-0">
+                                <div className="w-20 h-20 bg-slate-200 dark:bg-slate-700 rounded-full flex items-center justify-center text-slate-500 dark:text-slate-400">
+                                    <FileIcon className="w-10 h-10" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100">Quote PDF Ready</h3>
+                                    <p className="text-slate-500 dark:text-slate-400 mt-2">Previewing PDF documents inside the app is limited on mobile devices.</p>
+                                </div>
+                                <a 
+                                    href={pdfUrl} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="px-6 py-3 bg-sky-500 text-white font-bold rounded-lg shadow-md hover:bg-sky-600 transition-colors flex items-center"
+                                >
+                                    <DownloadIcon className="w-5 h-5 mr-2" />
+                                    Open PDF Viewer
+                                </a>
+                            </div>
+                        </div>
                     ) : (
-                        <div className="w-full h-full bg-white shadow-lg flex items-center justify-center">
+                        <div className="w-full h-full bg-white shadow-lg flex items-center justify-center min-h-[300px]">
                             <p className="text-slate-500">Generating preview...</p>
                         </div>
                     )}
-                     <div className="max-w-4xl mx-auto mt-4 p-4 bg-white dark:bg-slate-800 rounded-lg shadow-md border border-slate-200 dark:border-slate-700">
+                     <div className="w-full max-w-4xl mx-auto mt-6 p-4 bg-white dark:bg-slate-800 rounded-lg shadow-md border border-slate-200 dark:border-slate-700">
                         <h3 className="text-lg font-semibold mb-3">Accept Quote & Convert to Job</h3>
                         <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">Select the option the customer approved to automatically create a new job ticket with all the correct details.</p>
                         <div className="space-y-2">
