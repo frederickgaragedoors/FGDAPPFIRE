@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Contact, Quote, QuoteOption, JobTicket } from '../types.ts';
 import { useContacts } from '../contexts/ContactContext.tsx';
 import { useApp } from '../contexts/AppContext.tsx';
+import { useNotifications } from '../contexts/NotificationContext.tsx';
 import { ArrowLeftIcon, MailIcon, ShareIcon, PrinterIcon, DownloadIcon, CheckCircleIcon, FileIcon } from './icons.tsx';
 import { generateId, fileToDataUrl } from '../utils.ts';
 import { generateQuotePdf } from '../services/quotePdfGenerator.ts';
@@ -16,6 +17,7 @@ interface QuoteViewProps {
 const QuoteView: React.FC<QuoteViewProps> = ({ contactId, quoteId, onClose }) => {
     const { contacts, handleSaveQuote, handleUpdateContactJobTickets, handleAddFilesToContact } = useContacts();
     const { businessInfo, emailSettings } = useApp();
+    const { addNotification } = useNotifications();
     const [isSaving, setIsSaving] = useState(false);
     const [optionToConvert, setOptionToConvert] = useState<QuoteOption | null>(null);
     const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -68,6 +70,7 @@ const QuoteView: React.FC<QuoteViewProps> = ({ contactId, quoteId, onClose }) =>
 
             if (action === 'download') {
                 pdf.save(fileName);
+                addNotification("Quote downloaded successfully.", "success");
             } else if (action === 'print') {
                 const pdfBlob = pdf.output('blob');
                 const pdfUrl = URL.createObjectURL(pdfBlob);
@@ -77,6 +80,7 @@ const QuoteView: React.FC<QuoteViewProps> = ({ contactId, quoteId, onClose }) =>
                 const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
                 const dataUrl = await fileToDataUrl(pdfFile);
                 await handleAddFilesToContact(contact.id, [{ id: generateId(), name: fileName, type: 'application/pdf', size: pdfFile.size, dataUrl }], { [generateId()]: pdfFile });
+                addNotification("Quote attached to contact files.", "success");
             } else if (action === 'share' && isNativeShareSupported) {
                 const pdfBlob = pdf.output('blob');
                 const file = new File([pdfBlob], fileName, { type: 'application/pdf' });
@@ -90,9 +94,11 @@ const QuoteView: React.FC<QuoteViewProps> = ({ contactId, quoteId, onClose }) =>
                     const mailto = `mailto:${contact.email}?subject=${encodeURIComponent(quote.title)}`;
                     window.location.href = mailto;
                 }, 500);
+                addNotification("Quote downloaded for email attachment.", "info");
             }
         } catch (error) {
             console.error(`PDF action '${action}' failed:`, error);
+            addNotification(`Action failed: ${action}`, "error");
         } finally {
             setIsSaving(false);
         }

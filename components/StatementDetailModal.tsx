@@ -1,6 +1,7 @@
 import React, { useRef, useState, useMemo } from 'react';
 import { BankStatement, BankTransaction } from '../types.ts';
 import { XIcon, DownloadIcon, PrinterIcon, SearchIcon } from './icons.tsx';
+import { useNotifications } from '../contexts/NotificationContext.tsx';
 
 interface StatementDetailModalProps {
     statement: BankStatement;
@@ -11,6 +12,7 @@ interface StatementDetailModalProps {
 const StatementDetailModal: React.FC<StatementDetailModalProps> = ({ statement, transactions, onClose }) => {
     const printableRef = useRef<HTMLDivElement>(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const { addNotification } = useNotifications();
 
     const filteredTransactions = useMemo(() => {
         const sortedTransactions = [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -38,6 +40,7 @@ const StatementDetailModal: React.FC<StatementDetailModalProps> = ({ statement, 
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        addNotification("CSV downloaded successfully.", "success");
     };
 
     const handlePrint = () => {
