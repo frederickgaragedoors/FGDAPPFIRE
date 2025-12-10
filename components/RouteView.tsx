@@ -3,7 +3,7 @@ import { Supplier, SavedRouteStop, RouteStop, HomeStopData, JobStopData, RouteSt
 import { useApp } from '../contexts/AppContext.tsx';
 import { useContacts } from '../contexts/ContactContext.tsx';
 import { useNotifications } from '../contexts/NotificationContext.tsx';
-import { ArrowLeftIcon, MapPinIcon, XIcon, PlusIcon, SearchIcon, BuildingStorefrontIcon } from './icons.tsx';
+import { ArrowLeftIcon, MapPinIcon, XIcon, PlusIcon, SearchIcon, BuildingStorefrontIcon, MapIcon } from './icons.tsx';
 import { generateId, getAppointmentDetailsForDate } from '../utils.ts';
 
 import { useRoutePlanner } from '../hooks/useRoutePlanner.ts';
@@ -35,8 +35,9 @@ const AddStopModal: React.FC<AddStopModalProps> = ({ isOpen, onClose, onSave, su
     
     // Place Search Tab State
     const [placeSearch, setPlaceSearch] = useState('');
+    const [searchResults, setSearchResults] = useState<PlaceStopData[]>([]);
     const [selectedPlace, setSelectedPlace] = useState<PlaceStopData | null>(null);
-    const placeInputRef = useRef<HTMLInputElement>(null);
+    const [isSearching, setIsSearching] = useState(false);
     
     // Common State
     const [nextAction, setNextAction] = useState<'return' | 'continue' | null>('continue');
@@ -46,34 +47,66 @@ const AddStopModal: React.FC<AddStopModalProps> = ({ isOpen, onClose, onSave, su
             setSelectedSupplierId(suppliers[0]?.id || '');
             setNextAction('continue');
             setPlaceSearch('');
+            setSearchResults([]);
             setSelectedPlace(null);
             setActiveTab('supplier');
+            setIsSearching(false);
         }
     }, [isOpen, suppliers]);
 
-    // Initialize Autocomplete for Place Search
-    useEffect(() => {
-        if (isOpen && activeTab === 'place' && isMapsLoaded && placeInputRef.current && google) {
-            const autocomplete = new google.maps.places.Autocomplete(placeInputRef.current, {
-                fields: ['formatted_address', 'name', 'geometry'],
-            });
-            const listener = autocomplete.addListener('place_changed', () => {
-                const place = autocomplete.getPlace();
-                if (place.formatted_address || place.name) {
-                    const name = place.name || place.formatted_address?.split(',')[0] || 'Unknown Place';
-                    const address = place.formatted_address || place.name;
-                    setSelectedPlace({ name, address });
-                    setPlaceSearch(address); // Visual feedback
-                }
-            });
+    const handleSearch = () => {
+        if (!placeSearch.trim() || !isMapsLoaded || !google) return;
+
+        setIsSearching(true);
+        setSearchResults([]);
+        setSelectedPlace(null);
+
+        const performSearch = (location?: { lat: number, lng: number }) => {
+            const service = new google.maps.places.PlacesService(document.createElement('div'));
             
-            return () => {
-                if (google.maps.event && listener) {
-                    google.maps.event.removeListener(listener);
-                }
+            const request: any = {
+                query: placeSearch,
+                fields: ['name', 'formatted_address', 'geometry'],
             };
+
+            // If we have a location, bias the search
+            if (location) {
+                request.location = new google.maps.LatLng(location.lat, location.lng);
+                request.radius = 5000; // 5km radius bias
+            }
+
+            service.textSearch(request, (results: any[], status: any) => {
+                setIsSearching(false);
+                if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+                    const formattedResults = results.map(place => ({
+                        name: place.name || 'Unknown Place',
+                        address: place.formatted_address || place.name || 'Unknown Address'
+                    }));
+                    setSearchResults(formattedResults);
+                } else {
+                    setSearchResults([]);
+                }
+            });
+        };
+
+        // Try to get user location for better results
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    performSearch({
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude
+                    });
+                },
+                () => {
+                    // Geolocation failed or denied, search without location bias
+                    performSearch();
+                }
+            );
+        } else {
+            performSearch();
         }
-    }, [isOpen, activeTab, isMapsLoaded]);
+    };
 
     if (!isOpen) return null;
 
@@ -86,6 +119,12 @@ const AddStopModal: React.FC<AddStopModalProps> = ({ isOpen, onClose, onSave, su
         } else if (activeTab === 'place' && selectedPlace) {
             onSave({ type: 'place', data: selectedPlace, nextAction });
         }
+    };
+
+    const handleSelectPlace = (place: PlaceStopData) => {
+        setSelectedPlace(place);
+        setPlaceSearch(place.name); // Update input to show selection
+        setSearchResults([]); // Clear results to show selection state
     };
 
     const canReturn = previousStop?.type === 'job';
@@ -125,7 +164,7 @@ const AddStopModal: React.FC<AddStopModalProps> = ({ isOpen, onClose, onSave, su
                         className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'place' ? 'text-sky-600 border-b-2 border-sky-600 bg-sky-50 dark:bg-sky-900/20 dark:text-sky-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
                         onClick={() => setActiveTab('place')}
                     >
-                        Search Place
+                        Search Nearby
                     </button>
                 </div>
 
@@ -152,33 +191,83 @@ const AddStopModal: React.FC<AddStopModalProps> = ({ isOpen, onClose, onSave, su
                                 )}
                             </div>
                         ) : (
-                            <div>
+                            <div className="flex flex-col h-full min-h-[300px]">
                                 <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">Search Google Maps</label>
-                                <div className="relative">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <SearchIcon className="w-5 h-5 text-slate-400" />
+                                <div className="flex gap-2 mb-2">
+                                    <div className="relative flex-grow">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <SearchIcon className="w-5 h-5 text-slate-400" />
+                                        </div>
+                                        <input 
+                                            type="text" 
+                                            placeholder='e.g. "Gas Station", "Home Depot"'
+                                            value={placeSearch}
+                                            onChange={(e) => {
+                                                setPlaceSearch(e.target.value);
+                                                if (selectedPlace) setSelectedPlace(null);
+                                            }}
+                                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSearch(); } }}
+                                            className="block w-full pl-10 pr-3 py-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-sky-500 focus:border-sky-500 sm:text-sm dark:text-white"
+                                        />
                                     </div>
-                                    <input 
-                                        ref={placeInputRef}
-                                        type="text" 
-                                        placeholder="e.g. Shell Gas Station, Home Depot" 
-                                        value={placeSearch}
-                                        onChange={(e) => {
-                                            setPlaceSearch(e.target.value);
-                                            if (selectedPlace && e.target.value !== selectedPlace.address) {
-                                                setSelectedPlace(null); // Clear selection if typed manually without picking from list
-                                            }
-                                        }}
-                                        className="block w-full pl-10 pr-3 py-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-sky-500 focus:border-sky-500 sm:text-sm dark:text-white"
-                                    />
+                                    <button 
+                                        type="button" 
+                                        onClick={handleSearch}
+                                        disabled={isSearching || !placeSearch.trim()}
+                                        className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-md text-sm font-medium hover:bg-slate-300 dark:hover:bg-slate-600 disabled:opacity-50"
+                                    >
+                                        {isSearching ? '...' : 'Search'}
+                                    </button>
                                 </div>
-                                {selectedPlace && (
-                                    <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md text-sm">
-                                        <p className="font-semibold text-green-800 dark:text-green-300">Selected:</p>
-                                        <p className="text-green-700 dark:text-green-400">{selectedPlace.name}</p>
-                                        <p className="text-xs text-green-600 dark:text-green-500 opacity-80">{selectedPlace.address}</p>
-                                    </div>
-                                )}
+
+                                {/* Results List */}
+                                <div className="flex-grow overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-800/50 max-h-[200px]">
+                                    {isSearching ? (
+                                        <div className="p-4 text-center text-slate-500 text-sm">Searching nearby...</div>
+                                    ) : selectedPlace ? (
+                                        <div className="p-3 bg-green-50 dark:bg-green-900/20 m-2 rounded-md border border-green-200 dark:border-green-800">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <MapPinIcon className="w-4 h-4 text-green-600" />
+                                                <span className="text-sm font-bold text-green-800 dark:text-green-300">Selected Stop</span>
+                                            </div>
+                                            <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{selectedPlace.name}</p>
+                                            <p className="text-xs text-slate-500 dark:text-slate-400">{selectedPlace.address}</p>
+                                            <button 
+                                                type="button" 
+                                                onClick={() => { setSelectedPlace(null); handleSearch(); }}
+                                                className="text-xs text-green-600 hover:text-green-700 underline mt-2"
+                                            >
+                                                Change Selection
+                                            </button>
+                                        </div>
+                                    ) : searchResults.length > 0 ? (
+                                        <ul className="divide-y divide-slate-200 dark:divide-slate-700">
+                                            {searchResults.map((result, idx) => (
+                                                <li key={idx}>
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => handleSelectPlace(result)}
+                                                        className="w-full text-left p-3 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-colors flex items-start gap-3"
+                                                    >
+                                                        <MapIcon className="w-5 h-5 text-slate-400 mt-0.5 flex-shrink-0" />
+                                                        <div>
+                                                            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{result.name}</p>
+                                                            <p className="text-xs text-slate-500 dark:text-slate-400">{result.address}</p>
+                                                        </div>
+                                                    </button>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    ) : placeSearch && !isSearching && !selectedPlace ? (
+                                        <div className="p-4 text-center text-slate-500 text-sm">
+                                            No results found nearby. Try a different term.
+                                        </div>
+                                    ) : (
+                                        <div className="p-4 text-center text-slate-400 text-sm">
+                                            Enter a term (e.g. "Gas Station") and click Search. We'll find places near you.
+                                        </div>
+                                    )}
+                                </div>
                                 {!isMapsLoaded && (
                                     <p className="text-xs text-amber-600 mt-1">Map service loading...</p>
                                 )}
