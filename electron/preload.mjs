@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-// FIX: Removed `import process from 'process';`. The global `process` object provided by the Node.js environment should be used instead, which resolves the type error for `process.versions`.
+import process from 'process';
 
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object

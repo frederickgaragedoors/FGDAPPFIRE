@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import http from 'http';
 import nodeNet from 'net';
 import { Buffer } from 'buffer';
+import process from 'process';
 import { GoogleGenAI } from '@google/genai';
 
 const __filename = fileURLToPath(import.meta.url);
