@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useContacts } from '../contexts/ContactContext.tsx';
 import ContactListItem from './ContactListItem.tsx';
@@ -52,13 +50,20 @@ const ContactList: React.FC<ContactListProps> = ({
         const hasMatchingJobTicket = (contact.jobTickets || []).some(ticket =>
             ticket.id.toLowerCase().includes(query)
         );
+        
+        const hasMatchingAdditionalContact = (contact.additionalContacts || []).some(ac => 
+            ac.name.toLowerCase().includes(query) || 
+            ac.phone.toLowerCase().includes(query) ||
+            (ac.email && ac.email.toLowerCase().includes(query))
+        );
 
         return (
             contact.name.toLowerCase().includes(query) ||
             (contact.email && contact.email.toLowerCase().includes(query)) ||
             (contact.phone && contact.phone.toLowerCase().includes(query)) ||
             (contact.address && contact.address.toLowerCase().includes(query)) ||
-            hasMatchingJobTicket
+            hasMatchingJobTicket ||
+            hasMatchingAdditionalContact
         );
     });
   }, [contacts, debouncedQuery]);

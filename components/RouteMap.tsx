@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { RouteStop, HomeStopData, JobStopData, Supplier } from '../types.ts';
+import { RouteStop, HomeStopData, JobStopData, Supplier, PlaceStopData } from '../types.ts';
 import { useApp } from '../contexts/AppContext.tsx';
 import { useGoogleMaps } from '../hooks/useGoogleMaps.ts';
 
@@ -13,6 +13,7 @@ const getStopName = (stop: RouteStop) => {
     // FIX: Add explicit type casts to resolve TypeScript errors when accessing properties on the 'StopData' union type.
     if (stop.type === 'home') return (stop.data as HomeStopData).label === 'Start' ? 'Start From Home' : 'Return Home';
     if (stop.type === 'job') return (stop.data as JobStopData).contactName;
+    if (stop.type === 'place') return (stop.data as PlaceStopData).name;
     return (stop.data as Supplier).name;
 };
 

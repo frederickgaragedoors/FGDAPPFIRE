@@ -1,9 +1,9 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Contact, FileAttachment, CustomField, DefaultFieldSetting, JobTicket, DoorProfile, StatusHistoryEntry } from '../types.ts';
+import { Contact, FileAttachment, CustomField, DefaultFieldSetting, JobTicket, DoorProfile, StatusHistoryEntry, AdditionalContact, ContactMethod } from '../types.ts';
 import { useContacts } from '../contexts/ContactContext.tsx';
 import { useApp } from '../contexts/AppContext.tsx';
 import { useNotifications } from '../contexts/NotificationContext.tsx';
-import { UserCircleIcon, ArrowLeftIcon, FileIcon, TrashIcon, PlusIcon } from './icons.tsx';
+import { UserCircleIcon, ArrowLeftIcon, FileIcon, TrashIcon, PlusIcon, PhoneIcon } from './icons.tsx';
 import { fileToDataUrl, formatFileSize, generateId } from '../utils.ts';
 import { useGoogleMaps } from '../hooks/useGoogleMaps';
 
@@ -27,8 +27,10 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onCancel, ini
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
+  const [preferredMethod, setPreferredMethod] = useState<ContactMethod>('Call');
   const [files, setFiles] = useState<FileAttachment[]>([]);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [additionalContacts, setAdditionalContacts] = useState<AdditionalContact[]>([]);
   const [doorProfiles, setDoorProfiles] = useState<DoorProfile[]>([]);
   const [stagedFiles, setStagedFiles] = useState<FileAttachment[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -38,16 +40,16 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onCancel, ini
   const newFileObjects = useRef<{ [id: string]: File }>({});
 
   // This effect synchronizes the form's internal state with the `initialContact` prop.
-  // This makes the component more robust by ensuring it correctly displays the data
-  // of a new contact if the prop changes, fixing a potential bug where old data could persist.
   useEffect(() => {
     setName(initialContact?.name || '');
     setEmail(initialContact?.email || '');
     setPhone(initialContact?.phone || '');
     setAddress(initialContact?.address || '');
     setPhotoUrl(initialContact?.photoUrl || '');
+    setPreferredMethod(initialContact?.preferredMethod || 'Call');
     setFiles(initialContact?.files || []);
     setCustomFields(initialContact?.customFields || defaultFields?.map(df => ({ id: generateId(), label: df.label, value: '' })) || []);
+    setAdditionalContacts(initialContact?.additionalContacts || []);
     setStagedFiles([]);
     newFileObjects.current = {};
 
@@ -155,6 +157,19 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onCancel, ini
     setCustomFields(customFields.filter(cf => cf.id !== id));
   };
 
+  // Additional Contacts Logic
+  const handleAdditionalContactChange = (id: string, field: keyof AdditionalContact, value: string) => {
+    setAdditionalContacts(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
+  };
+
+  const addAdditionalContact = () => {
+    setAdditionalContacts([...additionalContacts, { id: generateId(), name: '', phone: '', email: '', label: '', preferredMethod: 'Call' }]);
+  };
+
+  const removeAdditionalContact = (id: string) => {
+    setAdditionalContacts(additionalContacts.filter(c => c.id !== id));
+  };
+
   const handleDoorProfileChange = (id: string, field: keyof DoorProfile, value: string) => {
     setDoorProfiles(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
   };
@@ -252,8 +267,10 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onCancel, ini
         phone, 
         address, 
         photoUrl, 
+        preferredMethod,
         files: finalFiles, 
         customFields, 
+        additionalContacts,
         jobTickets: initialJobTickets,
         doorProfiles: finalDoorProfiles
     };
@@ -372,13 +389,89 @@ const ContactForm: React.FC<ContactFormProps> = ({ initialContact, onCancel, ini
                         </div>
                         <div>
                             <label htmlFor="email" className="block text-sm font-medium text-slate-600 dark:text-slate-300">Email</label>
-                            <input type="email" id="email" value={email} onChange={e => setEmail(e.target.value)} required className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm dark:text-white" />
+                            <input type="email" id="email" value={email} onChange={e => setEmail(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm dark:text-white" />
                         </div>
-                        <div>
-                            <label htmlFor="phone" className="block text-sm font-medium text-slate-600 dark:text-slate-300">Phone</label>
-                            <input type="tel" id="phone" value={phone} onChange={e => setPhone(e.target.value)} required className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm dark:text-white" />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label htmlFor="phone" className="block text-sm font-medium text-slate-600 dark:text-slate-300">Phone (Primary)</label>
+                                <input type="tel" id="phone" value={phone} onChange={e => setPhone(e.target.value)} required className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm dark:text-white" />
+                            </div>
+                            <div>
+                                <label htmlFor="preferredMethod" className="block text-sm font-medium text-slate-600 dark:text-slate-300">Preferred Method</label>
+                                <select 
+                                    id="preferredMethod"
+                                    value={preferredMethod} 
+                                    onChange={(e) => setPreferredMethod(e.target.value as ContactMethod)}
+                                    className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm dark:text-white"
+                                >
+                                    <option value="Call">Call</option>
+                                    <option value="Text">Text</option>
+                                    <option value="Email">Email</option>
+                                </select>
+                            </div>
                         </div>
-                        <div>
+                        
+                        {/* Additional Contacts Section */}
+                        <div className="pt-2">
+                            <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">Secondary / Additional Contacts</label>
+                            <div className="space-y-3">
+                                {additionalContacts.map((contact) => (
+                                    <div key={contact.id} className="p-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                                            <input 
+                                                type="text" 
+                                                placeholder="Name" 
+                                                value={contact.name} 
+                                                onChange={(e) => handleAdditionalContactChange(contact.id, 'name', e.target.value)} 
+                                                className="block w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md text-sm focus:ring-sky-500 focus:border-sky-500 dark:text-white"
+                                            />
+                                            <input 
+                                                type="tel" 
+                                                placeholder="Phone Number" 
+                                                value={contact.phone} 
+                                                onChange={(e) => handleAdditionalContactChange(contact.id, 'phone', e.target.value)} 
+                                                className="block w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md text-sm focus:ring-sky-500 focus:border-sky-500 dark:text-white"
+                                            />
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                                            <input 
+                                                type="email" 
+                                                placeholder="Email Address (optional)" 
+                                                value={contact.email || ''} 
+                                                onChange={(e) => handleAdditionalContactChange(contact.id, 'email', e.target.value)} 
+                                                className="block w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md text-sm focus:ring-sky-500 focus:border-sky-500 dark:text-white"
+                                            />
+                                            <select 
+                                                value={contact.preferredMethod || 'Call'} 
+                                                onChange={(e) => handleAdditionalContactChange(contact.id, 'preferredMethod', e.target.value as ContactMethod)}
+                                                className="block w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md text-sm focus:ring-sky-500 focus:border-sky-500 dark:text-white"
+                                            >
+                                                <option value="Call">Prefer Call</option>
+                                                <option value="Text">Prefer Text</option>
+                                                <option value="Email">Prefer Email</option>
+                                            </select>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                            <input 
+                                                type="text" 
+                                                placeholder="Role (e.g. Spouse, Tenant) - Optional" 
+                                                value={contact.label || ''} 
+                                                onChange={(e) => handleAdditionalContactChange(contact.id, 'label', e.target.value)} 
+                                                className="block w-full mr-3 px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md text-xs focus:ring-sky-500 focus:border-sky-500 dark:text-white"
+                                            />
+                                            <button type="button" onClick={() => removeAdditionalContact(contact.id)} className="p-2 text-slate-400 hover:text-red-500 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700">
+                                                <TrashIcon className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <button type="button" onClick={addAdditionalContact} className="mt-2 text-sm text-sky-600 dark:text-sky-400 font-medium flex items-center hover:text-sky-700 dark:hover:text-sky-300">
+                                <PlusIcon className="w-4 h-4 mr-1" /> Add Secondary Contact
+                            </button>
+                        </div>
+
+                        <div className="pt-2">
                             <label htmlFor="address" className="block text-sm font-medium text-slate-600 dark:text-slate-300">Address</label>
                             <input 
                                 ref={addressInputRef}

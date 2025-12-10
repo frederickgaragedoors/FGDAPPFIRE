@@ -1,5 +1,5 @@
 import React from 'react';
-import { RouteStop, RouteMetrics, HomeStopData, JobStopData, Supplier } from '../types.ts';
+import { RouteStop, RouteMetrics, HomeStopData, JobStopData, Supplier, PlaceStopData } from '../types.ts';
 import { HomeIcon, UserCircleIcon, BuildingStorefrontIcon, MapPinIcon, PlusIcon, ClockIcon, TrashIcon, RefreshIcon } from './icons.tsx';
 import { formatTime } from '../utils.ts';
 
@@ -22,6 +22,7 @@ const getStopName = (stop: RouteStop) => {
     // FIX: Add explicit type casts to resolve TypeScript errors when accessing properties on the 'StopData' union type.
     if (stop.type === 'home') return (stop.data as HomeStopData).label === 'Start' ? 'Start From Home' : 'Return Home';
     if (stop.type === 'job') return (stop.data as JobStopData).contactName;
+    if (stop.type === 'place') return (stop.data as PlaceStopData).name;
     return (stop.data as Supplier).name;
 };
 
@@ -30,6 +31,7 @@ const getStopIcon = (stop: RouteStop): { Icon: React.FC<any>, classes: string, b
         case 'home': return { Icon: HomeIcon, classes: 'w-5 h-5 text-indigo-500 dark:text-indigo-400', bg: 'bg-indigo-100 dark:bg-indigo-900/30' };
         case 'job': return { Icon: UserCircleIcon, classes: 'w-5 h-5 text-sky-500 dark:text-sky-400', bg: 'bg-sky-100 dark:bg-sky-900/30' };
         case 'supplier': return { Icon: BuildingStorefrontIcon, classes: 'w-5 h-5 text-teal-500 dark:text-teal-400', bg: 'bg-teal-100 dark:bg-teal-900/30' };
+        case 'place': return { Icon: MapPinIcon, classes: 'w-5 h-5 text-amber-500 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-900/30' };
         default: return { Icon: MapPinIcon, classes: 'w-5 h-5 text-slate-500 dark:text-slate-400', bg: 'bg-slate-100 dark:bg-slate-700' };
     }
 };
@@ -140,7 +142,7 @@ const RouteSidebar: React.FC<RouteSidebarProps> = ({
                                                 <MapPinIcon className="w-5 h-5" />
                                             </button>
                                         )}
-                                        {stop.type === 'supplier' && (
+                                        {(stop.type === 'supplier' || stop.type === 'place') && (
                                             <button onClick={(e) => { e.stopPropagation(); onDeleteStop(stop.id); }} className="p-1.5 rounded-full text-slate-400 hover:text-red-500 hover:bg-red-100 dark:hover:bg-red-800/50" title="Delete Stop">
                                                 <TrashIcon className="w-5 h-5"/>
                                             </button>

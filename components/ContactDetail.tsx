@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { Contact, FileAttachment, JobTicket, jobStatusColors, paymentStatusColors, paymentStatusLabels, DoorProfile, StatusHistoryEntry, JobStatus, SafetyInspection, Quote, QuoteStatus } from '../types.ts';
+import { Contact, FileAttachment, JobTicket, jobStatusColors, paymentStatusColors, paymentStatusLabels, DoorProfile, StatusHistoryEntry, JobStatus, SafetyInspection, Quote, QuoteStatus, ContactMethod } from '../types.ts';
 import { useContacts } from '../contexts/ContactContext.tsx';
 import { useApp } from '../contexts/AppContext.tsx';
 import { useNavigation } from '../contexts/NavigationContext.tsx';
@@ -285,6 +285,8 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
         Declined: 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300',
     };
 
+    const pref = contact.preferredMethod || 'Call';
+
     return (
         <div className="h-full flex flex-col bg-slate-50 dark:bg-slate-900 overflow-y-auto">
             <div className="p-4 flex items-center border-b border-slate-200 dark:border-slate-700 sticky top-0 bg-slate-50 dark:bg-slate-900 z-10">
@@ -329,31 +331,75 @@ const ContactDetail: React.FC<ContactDetailProps> = ({
                     )}
                     <div>
                         <div className="text-sm text-slate-600 dark:text-slate-400 space-y-2">
-                             <p>
+                             <div className="flex flex-wrap items-center gap-2">
                                 <strong className="font-semibold text-slate-800 dark:text-slate-200">Email:</strong>{' '}
                                 {contact.email ? (
-                                <a href={`mailto:${contact.email}`} className="text-sky-600 dark:text-sky-400 hover:underline">
-                                    {contact.email}
+                                <a href={`mailto:${contact.email}`} className={`flex items-center space-x-1 px-2 py-0.5 rounded text-sm transition-colors ${pref === 'Email' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-200 ring-1 ring-indigo-500' : 'text-sky-600 dark:text-sky-400 hover:underline'}`}>
+                                    {pref === 'Email' && <MailIcon className="w-3 h-3" />}
+                                    <span>{contact.email}</span>
                                 </a>
                                 ) : 'N/A'}
-                            </p>
+                            </div>
                             <div className="flex items-center gap-4 flex-wrap">
                                 <p className="flex-shrink-0">
                                     <strong className="font-semibold text-slate-800 dark:text-slate-200">Phone:</strong> {formatPhoneNumber(contact.phone) || 'N/A'}
                                 </p>
                                 {contact.phone && (
                                     <div className="flex items-center space-x-2">
-                                        <a href={`tel:${contact.phone}`} className="flex items-center space-x-1 px-3 py-1 rounded-full text-sm font-medium text-sky-700 dark:text-sky-300 bg-sky-100 dark:bg-sky-900/50 hover:bg-sky-200 dark:hover:bg-sky-800 transition-colors">
+                                        <a href={`tel:${contact.phone}`} className={`flex items-center space-x-1 px-3 py-1 rounded-full text-sm font-medium transition-colors ${pref === 'Call' ? 'bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200 ring-1 ring-sky-500' : 'text-sky-700 dark:text-sky-300 bg-sky-100 dark:bg-sky-900/50 hover:bg-sky-200 dark:hover:bg-sky-800'}`}>
                                             <PhoneIcon className="w-4 h-4" />
                                             <span>Call</span>
                                         </a>
-                                        <a href={`sms:${contact.phone}`} className="flex items-center space-x-1 px-3 py-1 rounded-full text-sm font-medium text-teal-700 dark:text-teal-300 bg-teal-100 dark:bg-teal-900/50 hover:bg-teal-200 dark:hover:bg-teal-800 transition-colors">
+                                        <a href={`sms:${contact.phone}`} className={`flex items-center space-x-1 px-3 py-1 rounded-full text-sm font-medium transition-colors ${pref === 'Text' ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-200 ring-1 ring-teal-500' : 'text-teal-700 dark:text-teal-300 bg-teal-100 dark:bg-teal-900/50 hover:bg-teal-200 dark:hover:bg-teal-800'}`}>
                                             <MessageIcon className="w-4 h-4" />
                                             <span>Text</span>
                                         </a>
                                     </div>
                                 )}
                             </div>
+                            
+                            {/* Additional Contacts */}
+                            {contact.additionalContacts && contact.additionalContacts.length > 0 && (
+                                <div className="mt-3 border-t border-slate-200 dark:border-slate-700 pt-3">
+                                    <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 mb-2">Secondary Contacts</p>
+                                    <div className="space-y-3">
+                                        {contact.additionalContacts.map((ac) => {
+                                            const acPref = ac.preferredMethod;
+                                            return (
+                                                <div key={ac.id} className="flex flex-col bg-white dark:bg-slate-800 p-3 rounded border border-slate-200 dark:border-slate-700">
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <div>
+                                                            <p className="font-medium text-slate-800 dark:text-slate-200">
+                                                                {ac.name} 
+                                                                {ac.label && <span className="ml-2 text-xs text-slate-500 dark:text-slate-400 font-normal">({ac.label})</span>}
+                                                            </p>
+                                                            <p className="text-sm text-slate-600 dark:text-slate-400">{formatPhoneNumber(ac.phone)}</p>
+                                                            {ac.email && <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{ac.email}</p>}
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        <a href={`tel:${ac.phone}`} className={`flex items-center space-x-1 px-2 py-1 rounded text-xs font-medium transition-colors ${acPref === 'Call' ? 'bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200 ring-1 ring-sky-500' : 'text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-900/30 hover:bg-sky-100 dark:hover:bg-sky-800'}`}>
+                                                            <PhoneIcon className="w-3 h-3" />
+                                                            <span>Call</span>
+                                                        </a>
+                                                        <a href={`sms:${ac.phone}`} className={`flex items-center space-x-1 px-2 py-1 rounded text-xs font-medium transition-colors ${acPref === 'Text' ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-200 ring-1 ring-teal-500' : 'text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-900/30 hover:bg-teal-100 dark:hover:bg-teal-800'}`}>
+                                                            <MessageIcon className="w-3 h-3" />
+                                                            <span>Text</span>
+                                                        </a>
+                                                        {ac.email && (
+                                                            <a href={`mailto:${ac.email}`} className={`flex items-center space-x-1 px-2 py-1 rounded text-xs font-medium transition-colors ${acPref === 'Email' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-200 ring-1 ring-indigo-500' : 'text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-800'}`}>
+                                                                <MailIcon className="w-3 h-3" />
+                                                                <span>Email</span>
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
                             <p>
                                 <strong className="font-semibold text-slate-800 dark:text-slate-200">Address:</strong>{' '}
                                 {contact.address ? (

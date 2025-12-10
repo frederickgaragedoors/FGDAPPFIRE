@@ -18,6 +18,7 @@ const QuoteBuilderModal: React.FC<QuoteBuilderModalProps> = ({ contact, quoteId,
     const [title, setTitle] = useState('');
     const [options, setOptions] = useState<QuoteOption[]>([]);
     const [activeOptionId, setActiveOptionId] = useState<string | null>(null);
+    const [includeDeposit, setIncludeDeposit] = useState(false);
 
     useEffect(() => {
         const existingQuote = contact.quotes?.find(q => q.id === quoteId);
@@ -25,11 +26,13 @@ const QuoteBuilderModal: React.FC<QuoteBuilderModalProps> = ({ contact, quoteId,
             setTitle(existingQuote.title);
             setOptions(existingQuote.options.map(o => ({...o, parts: [...o.parts]}))); // Deep copy
             setActiveOptionId(existingQuote.options[0]?.id || null);
+            setIncludeDeposit(existingQuote.includeDeposit ?? false);
         } else {
             const newOptionId = generateId();
             setOptions([{ id: newOptionId, name: 'Standard Option', description: '', parts: [], laborCost: 0 }]);
             setActiveOptionId(newOptionId);
-            setTitle('New Garage Door Quote');
+            setTitle('New Quote');
+            setIncludeDeposit(false);
         }
     }, [contact, quoteId]);
     
@@ -90,6 +93,7 @@ const QuoteBuilderModal: React.FC<QuoteBuilderModalProps> = ({ contact, quoteId,
             options,
             salesTaxRate: businessInfo.defaultSalesTaxRate || 0,
             processingFeeRate: businessInfo.defaultProcessingFeeRate || 0,
+            includeDeposit,
         };
         handleSaveQuote(contact.id, quoteToSave);
         onClose();
@@ -124,6 +128,17 @@ const QuoteBuilderModal: React.FC<QuoteBuilderModalProps> = ({ contact, quoteId,
                          <div className="p-4">
                             <label htmlFor="quote-title" className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Quote Title</label>
                             <input id="quote-title" type="text" value={title} onChange={e => setTitle(e.target.value)} className={`mt-1 ${inputStyles}`} required />
+                        </div>
+                        <div className="px-4 pb-4">
+                            <label className="flex items-center space-x-2 cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    checked={includeDeposit} 
+                                    onChange={(e) => setIncludeDeposit(e.target.checked)}
+                                    className="h-4 w-4 text-sky-600 focus:ring-sky-500 border-slate-300 rounded"
+                                />
+                                <span className="text-sm text-slate-600 dark:text-slate-300">Require 30% Deposit</span>
+                            </label>
                         </div>
                         <div className="p-4 border-t border-slate-200 dark:border-slate-700">
                              <button type="button" onClick={addOption} className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-white bg-sky-500 hover:bg-sky-600">
