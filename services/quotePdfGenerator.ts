@@ -47,7 +47,7 @@ export const generateQuotePdf = async ({ contact, quote, businessInfo }: Generat
     }
     
     doc.setFontSize(24); doc.setFont('helvetica', 'bold'); doc.setTextColor('#1e293b'); // slate-800
-    doc.text(quote.title, pageWidth / 2, yPos + 20, { align: 'center' });
+    doc.text("New Quote", pageWidth / 2, yPos + 20, { align: 'center' });
 
     const rightColX = pageWidth - margin;
     doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor('#64748b'); // slate-500
@@ -135,7 +135,7 @@ export const generateQuotePdf = async ({ contact, quote, businessInfo }: Generat
         
         // --- Cash/Check Total Box ---
         const cashBoxY = yPos;
-        const cashBoxHeight = 65;
+        const cashBoxHeight = quote.includeDeposit ? 65 : 45;
         doc.setFillColor(248, 250, 252); // slate-50
         doc.setDrawColor(226, 232, 240); // slate-200
         doc.roundedRect(margin, cashBoxY, pageWidth - margin * 2, cashBoxHeight, 10, 10, 'FD');
@@ -150,19 +150,22 @@ export const generateQuotePdf = async ({ contact, quote, businessInfo }: Generat
         doc.setDrawColor(226, 232, 240); // slate-200
         doc.line(margin + 20, cashLineY, pageWidth - margin - 20, cashLineY);
 
-        // Deposit/Balance and Final Total just below the line
-        const cashFinalTotalY = cashLineY + 20;
-        doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor('#475569');
-        doc.text(`Deposit: $${cashDeposit.toFixed(2)} | Balance: $${cashBalance.toFixed(2)}`, margin + 20, cashFinalTotalY + 2);
+        // Deposit/Balance or just Total below the line
+        const cashFinalTotalY = cashLineY + (quote.includeDeposit ? 20 : 15);
+        
+        if (quote.includeDeposit) {
+            doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor('#475569');
+            doc.text(`Deposit: $${cashDeposit.toFixed(2)} | Balance: $${cashBalance.toFixed(2)}`, margin + 20, cashFinalTotalY + 2);
+        }
 
-        doc.setFontSize(18); doc.setFont('helvetica', 'bold');
+        doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor('#1e293b');
         doc.text(`$${cashTotal.toFixed(2)}`, pageWidth - margin - 20, cashFinalTotalY, { align: 'right' });
         
         yPos = cashBoxY + cashBoxHeight + 10;
 
         // --- Card Total Box ---
         const cardBoxY = yPos;
-        const cardBoxHeight = 85;
+        const cardBoxHeight = quote.includeDeposit ? 85 : 65;
         doc.setFillColor(240, 249, 255); // sky-50
         doc.setDrawColor(203, 213, 225); // slate-300
         doc.roundedRect(margin, cardBoxY, pageWidth - margin * 2, cardBoxHeight, 10, 10, 'FD');
@@ -186,12 +189,14 @@ export const generateQuotePdf = async ({ contact, quote, businessInfo }: Generat
         doc.setDrawColor(226, 232, 240); // slate-200
         doc.line(margin + 20, lineY, pageWidth - margin - 20, lineY);
 
-        // Deposit/Balance and Final Total just below the line
-        const finalTotalY = lineY + 20;
-        doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor('#475569');
-        doc.text(`Deposit: $${cardDeposit.toFixed(2)} | Balance: $${cardBalance.toFixed(2)}`, margin + 20, finalTotalY + 2);
+        // Deposit/Balance or just Total below the line
+        const finalTotalY = lineY + (quote.includeDeposit ? 20 : 15);
+        if (quote.includeDeposit) {
+            doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor('#475569');
+            doc.text(`Deposit: $${cardDeposit.toFixed(2)} | Balance: $${cardBalance.toFixed(2)}`, margin + 20, finalTotalY + 2);
+        }
 
-        doc.setFontSize(18); doc.setFont('helvetica', 'bold');
+        doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor('#1e293b');
         doc.text(`$${totalCost.toFixed(2)}`, pageWidth - margin - 20, finalTotalY, { align: 'right' });
 
         yPos = cardBoxY + cardBoxHeight + 20;
@@ -249,7 +254,7 @@ export const generateQuotePdf = async ({ contact, quote, businessInfo }: Generat
             
             // --- Cash / Check total ---
             const cashY = currentY;
-            const cashBoxHeight = 65;
+            const cashBoxHeight = quote.includeDeposit ? 65 : 45;
             doc.setFillColor(248, 250, 252); // slate-50
             doc.roundedRect(colX, cashY, colWidth, cashBoxHeight, 5, 5, 'F');
 
@@ -260,10 +265,12 @@ export const generateQuotePdf = async ({ contact, quote, businessInfo }: Generat
             doc.setDrawColor(226, 232, 240); // slate-200
             doc.line(colX + 10, cashLineY, colX + colWidth - 10, cashLineY);
 
-            const cashFinalTotalY = cashLineY + 18;
-            doc.setFontSize(7); doc.setTextColor('#475569');
-            doc.text(`Deposit: $${cashDeposit.toFixed(2)}`, colX + 10, cashFinalTotalY);
-            doc.text(`Balance: $${cashBalance.toFixed(2)}`, colX + 10, cashFinalTotalY + 9);
+            const cashFinalTotalY = cashLineY + (quote.includeDeposit ? 18 : 13);
+            if (quote.includeDeposit) {
+                doc.setFontSize(7); doc.setTextColor('#475569');
+                doc.text(`Deposit: $${cashDeposit.toFixed(2)}`, colX + 10, cashFinalTotalY);
+                doc.text(`Balance: $${cashBalance.toFixed(2)}`, colX + 10, cashFinalTotalY + 9);
+            }
 
             doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor('#1e293b');
             doc.text(`$${cashTotal.toFixed(2)}`, colX + colWidth - 10, cashFinalTotalY, { align: 'right' });
@@ -273,7 +280,7 @@ export const generateQuotePdf = async ({ contact, quote, businessInfo }: Generat
 
             // --- Card total section ---
             let cardY = currentY;
-            const cardBoxHeight = 84;
+            const cardBoxHeight = quote.includeDeposit ? 84 : 64;
             doc.setFillColor(240, 249, 255); // sky-50
             doc.roundedRect(colX, cardY, colWidth, cardBoxHeight, 5, 5, 'F');
 
@@ -296,10 +303,12 @@ export const generateQuotePdf = async ({ contact, quote, businessInfo }: Generat
             doc.line(colX + 10, lineY, colX + colWidth - 10, lineY);
 
             // Deposit/Balance and Final Total just below the line
-            const finalTotalY = lineY + 18;
-            doc.setFontSize(7);
-            doc.text(`Deposit: $${cardDeposit.toFixed(2)}`, colX + 10, finalTotalY);
-            doc.text(`Balance: $${cardBalance.toFixed(2)}`, colX + 10, finalTotalY + 9);
+            const finalTotalY = lineY + (quote.includeDeposit ? 18 : 13);
+            if (quote.includeDeposit) {
+                doc.setFontSize(7);
+                doc.text(`Deposit: $${cardDeposit.toFixed(2)}`, colX + 10, finalTotalY);
+                doc.text(`Balance: $${cardBalance.toFixed(2)}`, colX + 10, finalTotalY + 9);
+            }
 
             doc.setFontSize(14); doc.setFont('helvetica', 'bold');
             doc.text(`$${totalCost.toFixed(2)}`, colX + colWidth - 10, finalTotalY, { align: 'right' });
@@ -312,8 +321,8 @@ export const generateQuotePdf = async ({ contact, quote, businessInfo }: Generat
     }
 
     // --- Payment Schedule ---
-    const hasDeposit = quote.options.some(opt => calculateQuoteOptionTotal(opt, quote.salesTaxRate, quote.processingFeeRate).totalCost > 0);
-    if (hasDeposit) {
+    // Only show if the user explicitly enabled deposits
+    if (quote.includeDeposit) {
         yPos = checkAndAddPage(yPos, 80);
         doc.setDrawColor('#e2e8f0'); doc.line(margin, yPos, pageWidth - margin, yPos);
         yPos += 20;
