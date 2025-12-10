@@ -1,4 +1,4 @@
-import { JobTicket, Contact, StatusHistoryEntry, DoorProfile, SafetyInspection, JobStatus, QuoteOption, RouteStop, JobStopData, MapSettings, BusinessInfo, SavedRouteStop, Supplier, HomeStopData } from './types.ts';
+import { JobTicket, Contact, StatusHistoryEntry, DoorProfile, SafetyInspection, JobStatus, QuoteOption, RouteStop, JobStopData, MapSettings, BusinessInfo, SavedRouteStop, Supplier, HomeStopData, PlaceStopData } from './types.ts';
 
 /**
  * Generates a short, secure uppercase alphanumeric ID.
@@ -574,6 +574,15 @@ export const generateRouteStops = (
                 const supplierData = (businessInfo.suppliers || []).find(s => s.id === stop.supplierId);
                 if (supplierData) {
                     reconstructedRoute.push({ type: 'supplier', id: stop.id!, data: supplierData });
+                }
+            } else if (stop.type === 'place') {
+                // Reconstruct saved custom place
+                if (stop.placeName && stop.placeAddress) {
+                    reconstructedRoute.push({
+                        type: 'place',
+                        id: stop.id || `place-${index}`, 
+                        data: { name: stop.placeName, address: stop.placeAddress } as PlaceStopData
+                    });
                 }
             }
         });

@@ -120,6 +120,17 @@ export interface CustomField {
     value: string;
 }
 
+export type ContactMethod = 'Call' | 'Text' | 'Email';
+
+export interface AdditionalContact {
+    id: string;
+    name: string;
+    phone: string;
+    email?: string;
+    label?: string; // e.g. Spouse, Tenant, Manager
+    preferredMethod?: ContactMethod;
+}
+
 export interface Spring {
     id: string;
     size: string;
@@ -162,6 +173,7 @@ export interface Quote {
     options: QuoteOption[];
     salesTaxRate: number;
     processingFeeRate: number;
+    includeDeposit?: boolean;
 }
 
 export interface Contact {
@@ -173,6 +185,8 @@ export interface Contact {
     photoUrl: string;
     files: FileAttachment[];
     customFields: CustomField[];
+    additionalContacts?: AdditionalContact[];
+    preferredMethod?: ContactMethod;
     jobTickets: JobTicket[];
     doorProfiles?: DoorProfile[];
     quotes?: Quote[];
@@ -341,7 +355,7 @@ export interface Mileage {
 }
 
 // --- ROUTING ---
-export type RouteStopType = 'home' | 'job' | 'supplier';
+export type RouteStopType = 'home' | 'job' | 'supplier' | 'place';
 export interface HomeStopData { address: string; label: 'Start' | 'End'; }
 export interface JobStopData extends JobTicket {
     contactName: string;
@@ -350,7 +364,11 @@ export interface JobStopData extends JobTicket {
     address: string;
     time?: string;
 }
-export type StopData = JobStopData | Supplier | HomeStopData;
+export interface PlaceStopData {
+    name: string;
+    address: string;
+}
+export type StopData = JobStopData | Supplier | HomeStopData | PlaceStopData;
 export interface RouteStop {
     type: RouteStopType;
     id: string;
@@ -363,6 +381,8 @@ export interface SavedRouteStop {
     jobId?: string; // for job
     contactId?: string; // for job
     supplierId?: string; // for supplier
+    placeName?: string; // for place
+    placeAddress?: string; // for place
 }
 export interface RouteMetrics {
     travelTimeText: string;
